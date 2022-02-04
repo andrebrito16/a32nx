@@ -117,7 +117,7 @@ export class DFLeg extends XFLeg {
         return courseToFixDistanceToGo(ppos, this.outboundCourse, this.getPathEndPoint());
     }
 
-    getGuidanceParameters(ppos: Coordinates, trueTrack: Degrees): GuidanceParameters | undefined {
+    getGuidanceParameters(ppos: Coordinates, trueTrack: Degrees, _tas: Knots): GuidanceParameters | undefined {
         return courseToFixGuidance(ppos, trueTrack, this.outboundCourse, this.fix.infos.coordinates);
     }
 

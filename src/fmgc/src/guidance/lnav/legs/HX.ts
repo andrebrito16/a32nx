@@ -14,6 +14,7 @@ import { AltitudeConstraint, getAltitudeConstraintFromWaypoint, getSpeedConstrai
 import { Guidable } from '@fmgc/guidance/Guidable';
 import { XFLeg } from '@fmgc/guidance/lnav/legs/XF';
 import { LnavConfig } from '@fmgc/guidance/LnavConfig';
+import { MathUtils } from '@shared/MathUtils';
 import { PathVector, PathVectorType } from '../PathVector';
 
 interface HxGeometry {
@@ -43,9 +44,12 @@ export class HMLeg extends XFLeg {
 
     protected termConditionMet: boolean = false;
 
-    // protected inboundLegCourse: Degrees;
+    /**
+     * TAS used for the current prediction
+     */
+    public predictedSpeed: Knots;
 
-    // protected outboundLegCourse: Degrees;
+    protected geometry: HxGeometry;
 
     private immExitLength: NauticalMiles;
 
@@ -53,6 +57,10 @@ export class HMLeg extends XFLeg {
 
     constructor(public to: WayPoint, public segment: SegmentType) {
         super(to);
+
+        this.predictedSpeed = this.targetSpeed();
+
+        this.geometry = this.computeGeometry();
     }
 
     get inboundLegCourse(): DegreesTrue {
@@ -112,30 +120,45 @@ export class HMLeg extends XFLeg {
             }
         }
 
+        // hack to allow f-pln page to see state
+        this.to.additionalData.immExit = exit;
+
         this.immExitRequested = exit;
     }
 
-    // TODO temp until vnav can give this
+    /**
+     * Compute target speed in KTAS
+     * @todo temp until vnav can give this
+     * @returns
+     */
     targetSpeed(): Knots {
         // TODO unhax, need altitude => speed from vnav if not coded
-        const alt = this.to.legAltitude1;
-        let groundSpeed = 220; // TODO green dot, wind (from VNAV predictions)
+        const alt = this.to.legAltitude1 ?? SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet');
+        // FIXME we assume ISA atmosphere for now, and that we're holding below the tropopause
+        const temperature = 288.15 - 0.0019812 * alt;
+        const pressure = 1013.25 * (temperature / 288.15) ** 5.25588;
+
+        const greenDot = SimVar.GetSimVarValue('L:A32NX_SPEEDS_GD', 'number');
+        let kcas = greenDot > 0 ? greenDot : 220;
         if (this.to.speedConstraint > 100) {
-            groundSpeed = Math.min(groundSpeed, this.to.speedConstraint);
+            kcas = Math.min(kcas, this.to.speedConstraint);
         }
         // apply icao limits
         if (alt < 14000) {
-            groundSpeed = Math.min(230, groundSpeed);
+            kcas = Math.min(230, kcas);
         } else if (alt < 20000) {
-            groundSpeed = Math.min(240, groundSpeed);
+            kcas = Math.min(240, kcas);
         } else if (alt < 34000) {
-            groundSpeed = Math.min(265, groundSpeed);
+            kcas = Math.min(265, kcas);
         } else {
-            // TODO mach 0.83
-            groundSpeed = Math.min(240, groundSpeed);
+            kcas = Math.min(
+                MathUtils.convertMachToKCas(0.83, temperature, pressure),
+                kcas,
+            );
         }
         // TODO apply speed limit/alt
-        return groundSpeed;
+
+        return MathUtils.convertKCasToKTAS(kcas, temperature, pressure);
     }
 
     get outboundStartPoint(): Coordinates {
@@ -153,12 +176,11 @@ export class HMLeg extends XFLeg {
         }
 
         // distance is in time then...
-        // default should be 1 minute <= 14k ft, otherwise 1.5 minutes
-        const groundSpeed = this.targetSpeed();
-        return (this.to.additionalData.distanceInMinutes > 0 ? this.to.additionalData.distanceInMinutes : 1) * groundSpeed / 60;
+        const defaultMinutes = this.to.legAltitude1 ? 1 : 1.5;
+        return (this.to.additionalData.distanceInMinutes > 0 ? this.to.additionalData.distanceInMinutes : defaultMinutes) * this.predictedSpeed / 60;
     }
 
-    protected computeGeometry(_groundSpeed?: Knots): HxGeometry {
+    protected computeGeometry(): HxGeometry {
         /*
          * We define some fixes at the turning points around the hippodrome like so (mirror vertically for left turn):
          *         A          B
@@ -195,8 +217,8 @@ export class HMLeg extends XFLeg {
 
     get radius(): NauticalMiles {
         // TODO account for wind
-        const gsMs = this.targetSpeed() / 1.94384;
-        const radius = (gsMs ** 2 / (9.81 * Math.tan(maxBank(this.targetSpeed(), true) * Math.PI / 180)) / 1852) * LnavConfig.TURN_RADIUS_FACTOR;
+        const gsMs = this.predictedSpeed / 1.94384;
+        const radius = (gsMs ** 2 / (9.81 * Math.tan(maxBank(this.predictedSpeed, true) * Math.PI / 180)) / 1852) * LnavConfig.TURN_RADIUS_FACTOR;
 
         return radius;
     }
@@ -225,7 +247,7 @@ export class HMLeg extends XFLeg {
 
     /**
      *
-     * @param tas m/s... why tho?
+     * @param tas
      * @returns
      */
     public getNominalRollAngle(gs: Knots): Degrees {
@@ -233,7 +255,7 @@ export class HMLeg extends XFLeg {
     }
 
     protected getDistanceToGoThisOrbit(ppos: LatLongData): NauticalMiles {
-        const { fixB, arcCentreFix1, arcCentreFix2, sweepAngle } = this.computeGeometry();
+        const { fixB, arcCentreFix1, arcCentreFix2, sweepAngle } = this.geometry;
 
         switch (this.state) {
         case HxLegGuidanceState.Inbound:
@@ -255,7 +277,7 @@ export class HMLeg extends XFLeg {
     }
 
     get predictedPath(): PathVector[] {
-        const { fixA, fixB, fixC, arcCentreFix1, arcCentreFix2, sweepAngle } = this.computeGeometry();
+        const { fixA, fixB, fixC, arcCentreFix1, arcCentreFix2, sweepAngle } = this.geometry;
 
         return [
             {
@@ -285,7 +307,7 @@ export class HMLeg extends XFLeg {
         ];
     }
 
-    updateState(ppos: LatLongAlt, geometry: HxGeometry): void {
+    updateState(ppos: LatLongAlt, tas: Knots, geometry: HxGeometry): void {
         let dtg = 0;
 
         // TODO divide up into sectors and choose based on that?
@@ -312,18 +334,18 @@ export class HMLeg extends XFLeg {
         }
 
         if (dtg <= 0) {
+            if (this.state === HxLegGuidanceState.Inbound) {
+                this.updatePrediction(tas);
+            }
             this.state = (this.state + 1) % (HxLegGuidanceState.Arc2 + 1);
             console.log(`HX switched to state ${HxLegGuidanceState[this.state]}`);
         }
     }
 
-    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
-        // TODO get hold speed/predicted speed
-        const groundSpeed = SimVar.GetSimVarValue('GPS GROUND SPEED', 'knots');
-        const geometry = this.computeGeometry(groundSpeed);
-        const { fixB, arcCentreFix1, arcCentreFix2, sweepAngle } = geometry;
+    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
+        const { fixB, arcCentreFix1, arcCentreFix2, sweepAngle } = this.geometry;
 
-        this.updateState(ppos, geometry);
+        this.updateState(ppos, tas, this.geometry);
 
         let params: LateralPathGuidance;
         let dtg: NauticalMiles;
@@ -334,7 +356,7 @@ export class HMLeg extends XFLeg {
         case HxLegGuidanceState.Inbound:
             params = courseToFixGuidance(ppos, trueTrack, this.inboundLegCourse, this.to.infos.coordinates);
             dtg = courseToFixDistanceToGo(ppos, this.inboundLegCourse, this.to.infos.coordinates);
-            nextPhi = sweepAngle > 0 ? maxBank(groundSpeed /* FIXME TAS */, true) : -maxBank(groundSpeed /* FIXME TAS */, true);
+            nextPhi = sweepAngle > 0 ? maxBank(tas, true) : -maxBank(tas, true);
             break;
         case HxLegGuidanceState.Arc1:
             params = arcGuidance(ppos, trueTrack, this.to.infos.coordinates, arcCentreFix1, sweepAngle);
@@ -344,7 +366,7 @@ export class HMLeg extends XFLeg {
         case HxLegGuidanceState.Outbound:
             params = courseToFixGuidance(ppos, trueTrack, this.outboundLegCourse, fixB);
             dtg = courseToFixDistanceToGo(ppos, this.outboundLegCourse, fixB);
-            nextPhi = sweepAngle > 0 ? maxBank(groundSpeed /* FIXME TAS */, true) : -maxBank(groundSpeed /* FIXME TAS */, true);
+            nextPhi = sweepAngle > 0 ? maxBank(tas, true) : -maxBank(tas, true);
             break;
         case HxLegGuidanceState.Arc2:
             params = arcGuidance(ppos, trueTrack, fixB, arcCentreFix2, sweepAngle);
@@ -355,7 +377,7 @@ export class HMLeg extends XFLeg {
             throw new Error(`Bad HxLeg state ${this.state}`);
         }
 
-        const rad = Geometry.getRollAnticipationDistance(groundSpeed, prevPhi, nextPhi);
+        const rad = Geometry.getRollAnticipationDistance(tas, prevPhi, nextPhi);
         if (dtg <= rad) {
             params.phiCommand = nextPhi;
         }
@@ -363,9 +385,28 @@ export class HMLeg extends XFLeg {
         return params;
     }
 
-    recomputeWithParameters(_isActive: boolean, _tas: Knots, _gs: Knots, _ppos: Coordinates, _trueTrack: DegreesTrue, _previousGuidable: Guidable, _nextGuidable: Guidable): void {
+    recomputeWithParameters(isActive: boolean, _tas: Knots, _gs: Knots, _ppos: Coordinates, _trueTrack: DegreesTrue, _previousGuidable: Guidable, _nextGuidable: Guidable): void {
         // TODO store IMM EXIT point and termConditionMet flag, consider changes to hold params
         // console.log(this.predictedPath);
+        if (!isActive) {
+            this.updatePrediction(this.predictedSpeed);
+        }
+    }
+
+    /**
+     * Should be called on each crossing of the hold fix
+     */
+    updatePrediction(tas: number) {
+        this.predictedSpeed = tas;
+        this.geometry = this.computeGeometry();
+
+        // hack to allow f-pln page to show the speed
+        // TODO unhax, need altitude => speed from vnav if not coded
+        const alt = this.to.legAltitude1 ?? SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet');
+        // FIXME we assume ISA atmosphere for now, and that we're holding below the tropopause
+        const temperature = 288.15 - 0.0019812 * alt;
+        const pressure = 1013.25 * (temperature / 288.15) ** 5.25588;
+        this.to.additionalData.holdSpeed = MathUtils.convertTasToKCas(this.predictedSpeed, temperature, pressure);
     }
 
     // TODO are we even using this? What exactly should it tell us?
@@ -412,13 +453,13 @@ export class HALeg extends HMLeg {
         this.targetAltitude = this.to.legAltitude1;
     }
 
-    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
+    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
         // TODO get altitude, check for at or above our target
         // TODO do we need to force at least one circuit if already at the term altitude on entry? honeywell doc covers this..
         // FIXME use FMGC position data
-        this.termConditionMet = SimVar.GetSimVarValue('ALTITUDE INDICATED:1', 'feet') >= this.targetAltitude;
+        this.termConditionMet = SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet') >= this.targetAltitude;
 
-        return super.getGuidanceParameters(ppos, trueTrack);
+        return super.getGuidanceParameters(ppos, trueTrack, tas);
     }
 
     getDistanceToGo(ppos: LatLongData): NauticalMiles {
@@ -429,18 +470,74 @@ export class HALeg extends HMLeg {
         return 42;
     }
 
+    recomputeWithParameters(_isActive: boolean, _tas: Knots, _gs: Knots, _ppos: Coordinates, _trueTrack: DegreesTrue, _previousGuidable: Guidable, _nextGuidable: Guidable): void {
+        this.termConditionMet = SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet') >= this.targetAltitude;
+    }
+
     get disableAutomaticSequencing(): boolean {
         return false;
+    }
+
+    get predictedPath(): PathVector[] {
+        if (!this.termConditionMet) {
+            return super.predictedPath;
+        }
+
+        const { fixA, fixB, fixC, arcCentreFix1, arcCentreFix2, sweepAngle } = this.computeGeometry();
+
+        const path = [];
+
+        path.push({
+            type: PathVectorType.Line,
+            startPoint: fixC,
+            endPoint: this.to.infos.coordinates,
+        });
+
+        if (this.state === HxLegGuidanceState.Inbound) {
+            return path;
+        }
+
+        path.push({
+            type: PathVectorType.Arc,
+            startPoint: fixB,
+            centrePoint: arcCentreFix2,
+            endPoint: fixC,
+            sweepAngle,
+        });
+
+        if (this.state === HxLegGuidanceState.Arc2) {
+            return path;
+        }
+
+        path.push({
+            type: PathVectorType.Line,
+            startPoint: fixA,
+            endPoint: fixB,
+        });
+
+        if (this.state === HxLegGuidanceState.Outbound) {
+            return path;
+        }
+
+        path.push({
+            type: PathVectorType.Arc,
+            startPoint: this.to.infos.coordinates,
+            centrePoint: arcCentreFix1,
+            endPoint: fixA,
+            sweepAngle,
+        });
+
+        return path;
     }
 }
 
 export class HFLeg extends HMLeg {
     // TODO special predicted path for early exit to CF
 
-    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
+    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
         // always terminate on first crossing of holding fix after entry
         this.termConditionMet = true;
-        return super.getGuidanceParameters(ppos, trueTrack);
+        return super.getGuidanceParameters(ppos, trueTrack, tas);
     }
 
     getDistanceToGo(ppos: LatLongData): NauticalMiles {

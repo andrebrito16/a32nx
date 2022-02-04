@@ -158,7 +158,7 @@ export class CALeg extends Leg {
         return courseToFixDistanceToGo(ppos, this.course, this.estimatedTermination);
     }
 
-    getGuidanceParameters(ppos: Coordinates, trueTrack: Degrees): GuidanceParameters | undefined {
+    getGuidanceParameters(ppos: Coordinates, trueTrack: Degrees, _tas: Knots): GuidanceParameters | undefined {
         return courseToFixGuidance(ppos, trueTrack, this.course, this.estimatedTermination);
     }
 

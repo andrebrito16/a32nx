@@ -137,4 +137,66 @@ export class MathUtils {
 
        return ns.reduce((acc, v) => acc + v);
    }
+
+   /**
+     * Convert degrees Celsius into Kelvin
+     * @param celsius degrees Celsius
+     * @returns degrees Kelvin
+     */
+   public static convertCtoK(celsius: number): number {
+       return celsius + 273.15;
+   }
+
+   /**
+     * Convert Mach to True Air Speed
+     * @param mach Mach
+     * @param oat Kelvin
+     * @returns True Air Speed
+     */
+   public static convertMachToKTas(mach: number, oat: number): number {
+       return mach * 661.4786 * Math.sqrt(oat / 288.15);
+   }
+
+   /**
+     * Convert TAS to Mach
+     * @param tas TAS
+     * @param oat Kelvin
+     * @returns True Air Speed
+     */
+   public static convertKTASToMach(tas: number, oat: number): number {
+       return tas / 661.4786 / Math.sqrt(oat / 288.15);
+   }
+
+   /**
+     * Convert TAS to Calibrated Air Speed
+     * @param tas velocity true air speed
+     * @param oat current temperature Kelvin
+     * @param pressure current pressure hpa
+     * @returns Calibrated Air Speed
+     */
+   public static convertTasToKCas(tas: number, oat: number, pressure: number): number {
+       return 1479.1 * Math.sqrt((pressure / 1013 * ((1 + 1 / (oat / 288.15) * (tas / 1479.1) ** 2) ** 3.5 - 1) + 1) ** (1 / 3.5) - 1);
+   }
+
+   /**
+     * Convert KCAS to KTAS
+     * @param kcas velocity true air speed
+     * @param oat current temperature Kelvin
+     * @param pressure current pressure hpa
+     * @returns True Air Speed
+     */
+   public static convertKCasToKTAS(kcas, oat, pressure): number {
+       return 1479.1 * Math.sqrt(oat / 288.15 * ((1 / (pressure / 1013) * ((1 + 0.2 * (kcas / 661.4786) ** 2) ** 3.5 - 1) + 1) ** (1 / 3.5) - 1));
+   }
+
+   /**
+     * Convert Mach to Calibrated Air Speed
+     * @param mach Mach
+     * @param oat Kelvin
+     * @param pressure current pressure hpa
+     * @returns Calibrated Air Speed
+     */
+   public static convertMachToKCas(mach: number, oat: number, pressure: number): number {
+       return MathUtils.convertTasToKCas(MathUtils.convertMachToKTas(mach, oat), oat, pressure);
+   }
 }

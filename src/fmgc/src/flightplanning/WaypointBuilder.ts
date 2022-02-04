@@ -116,6 +116,11 @@ export class WaypointBuilder {
         newWaypoint.additionalData.distance = holdLength;
         newWaypoint.additionalData.distanceInMinutes = holdTime;
 
+        newWaypoint.speedConstraint = waypoint.speedConstraint;
+        newWaypoint.legAltitudeDescription = waypoint.legAltitudeDescription;
+        newWaypoint.legAltitude1 = waypoint.legAltitude1;
+        newWaypoint.legAltitude2 = waypoint.legAltitude2;
+
         return newWaypoint;
     }
 }

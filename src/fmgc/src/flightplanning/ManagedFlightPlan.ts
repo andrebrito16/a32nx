@@ -538,7 +538,7 @@ export class ManagedFlightPlan {
         }
     }
 
-    public addManualHold(
+    public addOrEditManualHold(
         index: number,
         holdDirection: TurnDirection.Left | TurnDirection.Right,
         inboundCourse: Degrees,
@@ -551,9 +551,17 @@ export class ManagedFlightPlan {
             return;
         }
 
-        const manualHoldWaypoint = WaypointBuilder.fromWaypointManualHold(atWaypoint, holdDirection, inboundCourse, holdLength, holdTime, this._parentInstrument);
+        if (atWaypoint.additionalData.legType === LegType.HA || atWaypoint.additionalData.legType === LegType.HF || atWaypoint.additionalData.legType === LegType.HM) {
+            atWaypoint.additionalData.legType = LegType.HM;
+            atWaypoint.turnDirection = holdDirection;
+            atWaypoint.additionalData.course = inboundCourse;
+            atWaypoint.additionalData.distance = holdLength;
+            atWaypoint.additionalData.distanceInMinutes = holdTime;
+        } else {
+            const manualHoldWaypoint = WaypointBuilder.fromWaypointManualHold(atWaypoint, holdDirection, inboundCourse, holdLength, holdTime, this._parentInstrument);
 
-        this.addWaypoint(manualHoldWaypoint, index + 1);
+            this.addWaypoint(manualHoldWaypoint, index + 1);
+        }
     }
 
     /**

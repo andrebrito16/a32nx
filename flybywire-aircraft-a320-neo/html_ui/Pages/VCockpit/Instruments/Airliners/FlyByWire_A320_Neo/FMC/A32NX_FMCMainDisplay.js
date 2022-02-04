@@ -721,6 +721,38 @@ class FMCMainDisplay extends BaseAirliners {
         }
     }
 
+    getHoldingSpeed(speedConstraint, altitude = undefined) {
+        // TODO unhax, need altitude => speed from vnav if not coded
+        const alt = altitude ? altitude : SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet');
+        // FIXME we assume ISA atmosphere for now, and that we're holding below the tropopause
+        const temperature = 288.15 - 0.0019812 * alt;
+        const pressure = 1013.25 * (temperature / 288.15) ** 5.25588;
+
+        let kcas = SimVar.GetSimVarValue('L:A32NX_SPEEDS_GD', 'number');
+        if (speedConstraint > 100) {
+            kcas = Math.min(kcas, speedConstraint);
+        }
+        // apply icao limits
+        if (alt < 14000) {
+            kcas = Math.min(230, kcas);
+        } else if (alt < 20000) {
+            kcas = Math.min(240, kcas);
+        } else if (alt < 34000) {
+            kcas = Math.min(265, kcas);
+        } else {
+            kcas = Math.min(
+                _convertMachToKCas(0.83, temperature, pressure),
+                kcas,
+            );
+        }
+        // apply speed limit/alt
+        if (alt <= this.managedSpeedLimitAlt) {
+            kcas = Math.min(this.managedSpeedLimit, kcas);
+        }
+
+        return _convertKCasToKTAS(kcas, temperature, pressure);
+    }
+
     getManagedTargets(v, m) {
         //const vM = _convertMachToKCas(m, _convertCtoK(Simplane.getAmbientTemperature()), SimVar.GetSimVarValue("AMBIENT PRESSURE", "millibar"));
         const vM = SimVar.GetGameVarValue("FROM MACH TO KIAS", "number", m);
@@ -743,6 +775,9 @@ class FMCMainDisplay extends BaseAirliners {
         let vPfd = 0;
         let isMach = false;
 
+        const currentLeg = this.flightPlanManager.getActiveWaypoint();
+        const nextLeg = this.flightPlanManager.getWaypoint(this.flightPlanManager.getActiveWaypointIndex() + 1);
+
         if (SimVar.GetSimVarValue("L:A32NX_FMA_EXPEDITE_MODE", "number") === 1) {
             const verticalMode = SimVar.GetSimVarValue("L:A32NX_FMA_VERTICAL_MODE", "number");
             if (verticalMode === 12) {
@@ -764,6 +799,28 @@ class FMCMainDisplay extends BaseAirliners {
             }
             vPfd = this.managedSpeedTarget;
         } else {
+            // FIXME big hack until VNAV can do this
+            if (currentLeg && currentLeg.additionalData.legType >= 12 && currentLeg.additionalData.legType <= 14) {
+                this.managedSpeedTarget = this.getHoldingSpeed(currentLeg.speedConstraint);
+                return;
+            } else if (nextLeg && nextLeg.additionalData.legType >= 12 && nextLeg.additionalData.legType <= 14) {
+                const adirLat = ADIRS.getLatitude();
+                const adirLong = ADIRS.getLongitude();
+                const ppos = (adirLat.isNormalOperation() && adirLong.isNormalOperation()) ? {
+                    lat: ADIRS.getLatitude().value,
+                    long: ADIRS.getLongitude().value,
+                } : {
+                    lat: NaN,
+                    long: NaN
+                };
+                const stats = this.flightPlanManager.getCurrentFlightPlan().computeWaypointStatistics(ppos);
+                // decel range limits are [3, 20] NM, we just punt...
+                if (stats.get(this.flightPlanManager.getActiveWaypointIndex()).distanceFromPpos < 5) {
+                    this.managedSpeedTarget = this.getHoldingSpeed(nextLeg.speedConstraint);
+                    return;
+                }
+            }
+
             switch (this.currentFlightPhase) {
                 case FmgcFlightPhases.PREFLIGHT: {
                     if (this.v2Speed) {

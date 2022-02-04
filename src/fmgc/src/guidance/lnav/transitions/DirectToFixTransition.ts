@@ -302,6 +302,10 @@ export class DirectToFixTransition extends Transition {
             straightDtg = courseToFixDistanceToGo(ppos, this.straightCourse, this.lineEndPoint);
         }
 
+        if (!this.hasArc) {
+            return straightDtg;
+        }
+
         return straightDtg + arcDistanceToGo(ppos, this.arcStartPoint, this.arcCentrePoint, this.arcSweepAngle);
     }
 

@@ -75,10 +75,12 @@ export class VMLeg extends Leg {
     }
 
     get inboundCourse(): Degrees {
+        // FIXME this is a bit naughty...
         return this.heading;
     }
 
     get outboundCourse(): Degrees {
+        // FIXME this is a bit naughty...
         return this.heading;
     }
 

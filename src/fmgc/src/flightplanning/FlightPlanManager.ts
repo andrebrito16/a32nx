@@ -964,7 +964,7 @@ export class FlightPlanManager {
         callback();
     }
 
-    addManualHold(
+    addOrEditManualHold(
         index: number,
         holdDirection: TurnDirection.Left | TurnDirection.Right,
         inboundCourse: Degrees,
@@ -973,7 +973,7 @@ export class FlightPlanManager {
         instrument: BaseInstrument,
         callback = () => {},
     ): void {
-        this._flightPlans[this._currentFlightPlanIndex].addManualHold(
+        this._flightPlans[this._currentFlightPlanIndex].addOrEditManualHold(
             index,
             holdDirection,
             inboundCourse,

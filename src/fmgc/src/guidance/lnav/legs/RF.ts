@@ -126,7 +126,7 @@ export class RFLeg extends XFLeg {
     }
 
     // basically straight from type 1 transition... willl need refinement
-    getGuidanceParameters(ppos: LatLongAlt, trueTrack: number): GuidanceParameters | null {
+    getGuidanceParameters(ppos: LatLongAlt, trueTrack: number, _tas: Knots): GuidanceParameters | null {
         // FIXME should be defined in terms of to fix
         return arcGuidance(ppos, trueTrack, this.from.infos.coordinates, this.center, this.clockwise ? this.angle : -this.angle);
     }

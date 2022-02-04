@@ -130,7 +130,13 @@ export function minBank(segment: SegmentType): Degrees {
     return segment === SegmentType.Enroute ? 5 : 10;
 }
 
-export function maxBank(tas: Knots, toGuidedPath: boolean): Degrees {
+/**
+ *
+ * @param tas
+ * @param pathCapture true when the turn is to capture a path or heading, or for curved legs
+ * @returns
+ */
+export function maxBank(tas: Knots, pathCapture: boolean): Degrees {
     /*
     TODO
     if (engineOut) {
@@ -138,7 +144,7 @@ export function maxBank(tas: Knots, toGuidedPath: boolean): Degrees {
     }
     */
 
-    if (toGuidedPath) {
+    if (pathCapture) {
         // roll limit 2 from honeywell doc
         if (tas < 100) {
             return 15 + (tas / 10);

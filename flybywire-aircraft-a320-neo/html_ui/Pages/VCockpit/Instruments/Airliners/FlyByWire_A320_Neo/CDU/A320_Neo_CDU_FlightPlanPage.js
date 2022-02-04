@@ -94,6 +94,11 @@ class CDUFlightPlanPage {
             }
 
             const wp = fpm.getWaypoint(i);
+
+            if (wp.additionalData.legType === 14 /* HM */) {
+                waypointsAndMarkers.push({ holdResumeExit: wp, fpIndex: i });
+            }
+
             waypointsAndMarkers.push({ wp, fpIndex: i});
 
             if (wp.endsInDiscontinuity) {
@@ -134,7 +139,7 @@ class CDUFlightPlanPage {
         for (let rowI = 0, winI = offset; rowI < rowsCount; rowI++, winI++) {
             winI = winI % (waypointsAndMarkers.length);
 
-            const {wp, pwp, marker, fpIndex} = waypointsAndMarkers[winI];
+            const {wp, pwp, marker, holdResumeExit, fpIndex} = waypointsAndMarkers[winI];
             const {fpIndex: prevFpIndex} = (winI > 0) ? waypointsAndMarkers[winI - 1] : { fpIndex: null};
 
             if (wp) {
@@ -232,7 +237,7 @@ class CDUFlightPlanPage {
                             fixAnnotation = `HOLD ${wp.turnDirection === 1 ? 'L' : 'R'}`;
                             break;
                         case 14: // HM
-                            fixAnnotation = `C${wp.additionalData.course.toFixed(0).padStart(3, '0')}`;
+                            fixAnnotation = `C${wp.additionalData.course.toFixed(0).padStart(3, '0')}°`;
                             break;
                         case 19: // VA
                         case 20: // VD
@@ -262,7 +267,7 @@ class CDUFlightPlanPage {
 
                 // Bearing/Track
                 let bearingTrack = "";
-                if (wpPrev) {
+                if (wpPrev && wp.additionalData.legType !== 14 /* HM */) {
                     const magVar = Facilities.getMagVar(wpPrev.infos.coordinates.lat, wpPrev.infos.coordinates.long);
                     switch (rowI) {
                         case 1:
@@ -554,6 +559,42 @@ class CDUFlightPlanPage {
                         CDUFlightPlanPage.ShowPage(mcdu, offset);
                     }, !fpm.isCurrentFlightPlanTemporary());
                 });
+            } else if (holdResumeExit) {
+                let color = "green";
+                if (fpm.isCurrentFlightPlanTemporary()) {
+                    color = "yellow";
+                } else if (fpIndex === fpm.getActiveWaypointIndex()) {
+                    color = "white";
+                }
+
+                const holdSpeed = holdResumeExit.additionalData.holdSpeed ? holdResumeExit.additionalData.holdSpeed.toFixed(0) : '---';
+                const turnDirection = holdResumeExit.turnDirection === 1 ? 'L' : 'R';
+                // prompt should only be shown once entering decel for hold (3 - 20 NM before hold)
+                const immExit = !holdResumeExit.additionalData.immExit;
+                const resumeHold = holdResumeExit.additionalData.immExit;
+
+                scrollWindow[rowI] = {
+                    fpIndex,
+                    holdResumeExit,
+                    color,
+                    immExit,
+                    resumeHold,
+                    holdSpeed,
+                    turnDirection,
+                };
+
+                addLskAt(rowI, 0, (value, scratchpadCallback) => {
+                    CDUHoldAtPage.ShowPage(mcdu, holdResumeExit, fpIndex);
+                    scratchpadCallback();
+                });
+
+                addRskAt(rowI, 0, (value, scratchpadCallback) => {
+                    // IMM EXIT, only active once reaching decel
+                    // TODO delete from F-pln if not yet at holding fix
+                    // else set imm exit flag on the leg
+                    mcdu.addNewMessage(NXFictionalMessages.notYetImplemented);
+                    scratchpadCallback();
+                });
             }
         }
 
@@ -574,18 +615,21 @@ class CDUFlightPlanPage {
         let firstWp = scrollWindow.length;
         const scrollText = [];
         for (let rowI = 0; rowI < scrollWindow.length; rowI++) {
-            const { marker: cMarker, pwp: cPwp, speedConstraint: cSpd, altitudeConstraint: cAlt } = scrollWindow[rowI];
+            const { marker: cMarker, pwp: cPwp, holdResumeExit: cHold, speedConstraint: cSpd, altitudeConstraint: cAlt } = scrollWindow[rowI];
             let spdRpt = false;
             let altRpt = false;
             let showFix = true;
             let showDist = true;
             let showNm = false;
 
-            // Waypoint
-            if (!cMarker && !cPwp) {
+            if (cHold) {
+                const { color, immExit, resumeHold, holdSpeed, turnDirection } = scrollWindow[rowI];
+                scrollText[(rowI * 2) - 1] = ['', `{amber}${immExit ? 'IMM\xa0\xa0' : ''}${resumeHold ? 'RESUME' : ''}{end}`, 'HOLD\xa0\xa0\xa0\xa0\xa0'];
+                scrollText[(rowI * 2)] = [`{${color}}HOLD ${turnDirection}{end}`, `{amber}${immExit ? 'EXIT*' : ''}${resumeHold ? 'HOLD*' : ''}{end}`, `{${color}}{small}{white}SPD{end}\xa0${holdSpeed}{end}{end}`];
+            } else if (!cMarker && !cPwp) { // Waypoint
                 if (rowI > 0) {
-                    const { marker: pMarker, pwp: pPwp, speedConstraint: pSpd, altitudeConstraint: pAlt} = scrollWindow[rowI - 1];
-                    if (!pMarker && !pPwp) {
+                    const { marker: pMarker, pwp: pPwp, holdResumeExit: pHold, speedConstraint: pSpd, altitudeConstraint: pAlt} = scrollWindow[rowI - 1];
+                    if (!pMarker && !pPwp && !pHold) {
                         firstWp = Math.min(firstWp, rowI);
                         if (rowI === firstWp) {
                             showNm = true;
@@ -600,7 +644,7 @@ class CDUFlightPlanPage {
                             altRpt = true;
                         }
                     // If previous row is a marker, clear all headers
-                    } else {
+                    } else if (!pHold) {
                         showDist = false;
                         showFix = false;
                     }

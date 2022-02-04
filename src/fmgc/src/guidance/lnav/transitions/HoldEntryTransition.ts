@@ -60,6 +60,8 @@ export class HoldEntryTransition extends Transition {
     // hax
     private wasAbeam = false;
 
+    private guidanceActive = false;
+
     private frozen = false;
 
     constructor(
@@ -105,10 +107,8 @@ export class HoldEntryTransition extends Transition {
         this.nextLeg.setTransitionEndPoint(this.getPathEndPoint());
     }
 
-    getParallelTeardropGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
+    getParallelTeardropGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
         let dtg;
-
-        const tas = SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots');
 
         // update state
         switch (this.state) {
@@ -147,7 +147,7 @@ export class HoldEntryTransition extends Transition {
             const trackAngleError = this.turn2.sweepAngle < 0 ? Avionics.Utils.clampAngle(refFrameOffset - trueTrack) : Avionics.Utils.clampAngle(trueTrack - refFrameOffset);
             if (trackAngleError < 130) {
                 this.state = EntryState.Capture;
-                params = this.nextLeg.getGuidanceParameters(ppos, trueTrack);
+                params = this.nextLeg.getGuidanceParameters(ppos, trueTrack, tas);
             } else {
                 // force the initial part of the turn to ensure correct direction
                 params = {
@@ -169,19 +169,24 @@ export class HoldEntryTransition extends Transition {
         return params;
     }
 
-    getDirectGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
+    getDirectGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, _tas: Knots): GuidanceParameters {
         // TODO RAD for straight part to outbound
         return arcGuidance(ppos, trueTrack, this.turn1.itp, this.turn1.arcCentre, this.turn1.sweepAngle);
     }
 
-    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees): GuidanceParameters {
+    getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
+        if (!this.guidanceActive) {
+            this.nextLeg.updatePrediction(tas);
+            this.guidanceActive = true;
+        }
+
         switch (this.entry) {
         case EntryType.Parallel:
         case EntryType.Teardrop:
-            return this.getParallelTeardropGuidanceParameters(ppos, trueTrack);
+            return this.getParallelTeardropGuidanceParameters(ppos, trueTrack, tas);
         case EntryType.DirectOutbound:
         case EntryType.DirectTurn:
-            return this.getDirectGuidanceParameters(ppos, trueTrack);
+            return this.getDirectGuidanceParameters(ppos, trueTrack, tas);
         default:
         }
 
