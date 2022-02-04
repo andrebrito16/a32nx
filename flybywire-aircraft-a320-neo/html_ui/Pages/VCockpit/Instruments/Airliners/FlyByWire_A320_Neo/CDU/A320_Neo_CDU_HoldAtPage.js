@@ -26,6 +26,27 @@ class CDUHoldAtPage {
             let pilotTime = false;
             let pilotDistance = false;
 
+            if (!mcdu.manualHoldData && waypoint.additionalData.legType === 14 /* HM */) {
+                const manualHoldData = {};
+                if (holdCourse !== waypoint.additionalData.course) {
+                    manualHoldData.course = waypoint.additionalData.course;
+                }
+                const turnDirection = waypoint.turnDirection === 1 ? 'L' : 'R';
+                if (holdTurn !== turnDirection) {
+                    manualHoldData.turn = turnDirection;
+                }
+                if (holdTime !== waypoint.additionalData.distanceInMinutes) {
+                    manualHoldData.time = waypoint.additionalData.distanceInMinutes;
+                }
+                if (holdDistance !== waypoint.additionalData.distance) {
+                    manualHoldData.distance = waypoint.additionalData.distance;
+                }
+                if (Object.keys(manualHoldData).length > 0) {
+                    computed = false;
+                    mcdu.manualHoldData = manualHoldData;
+                }
+            }
+
             // we use this (temporal) object to store in-process hold edits
             // it should not survive after leaving this page any possible way
             // TODO make ^^ true
@@ -47,13 +68,6 @@ class CDUHoldAtPage {
                     pilotDistance = true;
                 }
                 computed = false;
-            } else if (waypoint.additionalData.legType === 14 /* HM */) {
-                // TODO probably need to store the pilot entered params on the leg so we can show them correctly during edit...
-                holdCourse = waypoint.additionalData.course;
-                holdTurn = waypoint.turnDirection === 1 ? 'L' : 'R';
-                holdTime = waypoint.additionalData.distanceInMinutes;
-                holdDistance = waypoint.additionalData.distance;
-                computed = false; // we should probably keep this state around?
             }
 
             if (holdTime === undefined) {
@@ -66,7 +80,7 @@ class CDUHoldAtPage {
             const magCourse = A32NX_Util.trueToMagnetic(holdCourse, magVar);
 
             const rows = [];
-            rows.push([(computed ? "COMPUTED HOLD {small}AT{end} " : "HOLD {small}at{end} ") + "{green}" + waypoint.ident + "{end}"]);
+            rows.push([(computed ? "COMPUTED HOLD {small}AT{end} " : "HOLD {small}AT{end} ") + "{green}" + waypoint.ident + "{end}"]);
             rows.push(["INB CRS", "", ""]);
             rows.push([`{yellow}${pilotCourse ? '{big}' : '{small}'}${magCourse.toFixed(0).padStart(3, '0')}°{end}{end}`]);
             rows.push(["TURN", computed ? "" : "REVERT TO", ""]);
@@ -123,7 +137,7 @@ class CDUHoldAtPage {
 
             // change time or distance
             mcdu.onLeftInput[2] = (value, scratchpadCallback) => {
-                const m = value.match(/^(([0-9]{0,1}(.[0-9])?)\/?|\/([0-9]{0,2}(.[0-9])?))$/);
+                const m = value.match(/^(([0-9]{0,1}(\.[0-9])?)\/?|\/([0-9]{0,2}(\.[0-9])?))$/);
                 if (m === null) {
                     mcdu.addNewMessage(NXSystemMessages.formatError);
                     scratchpadCallback();
@@ -143,8 +157,10 @@ class CDUHoldAtPage {
 
                 if (time) {
                     mcdu.manualHoldData.time = parseFloat(time);
+                    mcdu.manualHoldData.distance = undefined;
                 } else if (dist) {
                     mcdu.manualHoldData.distance = parseFloat(dist);
+                    mcdu.manualHoldData.time = undefined;
                 }
 
                 CDUHoldAtPage.ShowPage(mcdu, waypoint, waypointIndexFP);

@@ -222,6 +222,7 @@ class CDUFlightPlanPage {
                 }
 
                 if (wp.additionalData) {
+                    const magVar = Facilities.getMagVar(wp.infos.coordinates.lat, wp.infos.coordinates.long);
                     // ARINC Leg Types - R1A 610
                     switch (wp.additionalData.legType) {
                         case 1: // AF
@@ -237,7 +238,8 @@ class CDUFlightPlanPage {
                             fixAnnotation = `HOLD ${wp.turnDirection === 1 ? 'L' : 'R'}`;
                             break;
                         case 14: // HM
-                            fixAnnotation = `C${wp.additionalData.course.toFixed(0).padStart(3, '0')}°`;
+                            const magCourse = A32NX_Util.trueToMagnetic(wp.additionalData.course, magVar);
+                            fixAnnotation = `C${magCourse.toFixed(0).padStart(3, '0')}°`;
                             break;
                         case 19: // VA
                         case 20: // VD
