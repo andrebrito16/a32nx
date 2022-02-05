@@ -17,6 +17,7 @@ import { CourseCaptureTransition } from '@fmgc/guidance/lnav/transitions/CourseC
 import { DirectToFixTransitionGuidanceState, DirectToFixTransition } from '@fmgc/guidance/lnav/transitions/DirectToFixTransition';
 import { PathVector } from '@fmgc/guidance/lnav/PathVector';
 import { CALeg } from '@fmgc/guidance/lnav/legs/CA';
+import { isCourseReversalLeg } from '@fmgc/guidance/lnav/legs';
 import { ControlLaw, GuidanceParameters, LateralPathGuidance } from './ControlLaws';
 
 export class Geometry {
@@ -47,7 +48,7 @@ export class Geometry {
 
     public cachedVectorsVersion = 0;
 
-    public getAllPathVectors(): PathVector[] {
+    public getAllPathVectors(activeLegIndex?: number): PathVector[] {
         if (this.version === this.cachedVectorsVersion) {
             return this.cachedVectors;
         }
@@ -55,6 +56,12 @@ export class Geometry {
         const ret = [];
 
         for (const [index, leg] of this.legs.entries()) {
+            if (activeLegIndex !== undefined) {
+                if (isCourseReversalLeg(leg) && index !== activeLegIndex && index !== (activeLegIndex + 1)) {
+                    continue;
+                }
+            }
+
             const legInboundTransition = this.transitions.get(index - 1);
 
             if (legInboundTransition) {
@@ -334,6 +341,12 @@ export class Geometry {
         }
 
         return false;
+    }
+
+    onLegSequenced(_sequencedLeg: Leg, nextLeg: Leg, followingLeg: Leg): void {
+        if (isCourseReversalLeg(nextLeg) || isCourseReversalLeg(followingLeg)) {
+            this.version++;
+        }
     }
 
     legsInSegment(segmentType: SegmentType): Map<number, Leg> {

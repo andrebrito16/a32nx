@@ -47,7 +47,7 @@ export class EfisVectors {
             console.time('vectors transmit');
         }
 
-        const activeFlightPlanVectors = this.guidanceController.activeGeometry?.getAllPathVectors() ?? [];
+        const activeFlightPlanVectors = this.guidanceController.activeGeometry?.getAllPathVectors(this.guidanceController.activeLegIndex) ?? [];
         const temporaryFlightPlanVectors = this.guidanceController.temporaryGeometry?.getAllPathVectors() ?? [];
 
         const visibleActiveFlightPlanVectors = activeFlightPlanVectors

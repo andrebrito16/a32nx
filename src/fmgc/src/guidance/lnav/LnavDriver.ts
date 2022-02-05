@@ -365,6 +365,7 @@ export class LnavDriver implements GuidanceComponent {
                 const currentLeg = activeLeg;
                 const outboundTransition = geometry.transitions.get(activeLegIdx);
                 const nextLeg = geometry.legs.get(activeLegIdx + 1);
+                const followingLeg = geometry.legs.get(activeLegIdx + 2);
 
                 if (nextLeg) {
                     // FIXME we should stop relying on discos in the wpt objects, but for now it's fiiiiiine
@@ -375,6 +376,7 @@ export class LnavDriver implements GuidanceComponent {
                     } else {
                         this.sequenceLeg(currentLeg, outboundTransition);
                     }
+                    geometry.onLegSequenced(currentLeg, nextLeg, followingLeg);
                 }
             }
         }

@@ -562,18 +562,24 @@ class CDUFlightPlanPage {
                     }, !fpm.isCurrentFlightPlanTemporary());
                 });
             } else if (holdResumeExit) {
+                const isActive = fpIndex === fpm.getActiveWaypointIndex();
+                const isNext = fpIndex === (fpm.getActiveWaypointIndex() + 1);
                 let color = "green";
                 if (fpm.isCurrentFlightPlanTemporary()) {
                     color = "yellow";
-                } else if (fpIndex === fpm.getActiveWaypointIndex()) {
+                } else if (isActive) {
                     color = "white";
                 }
 
-                const holdSpeed = holdResumeExit.additionalData.holdSpeed ? holdResumeExit.additionalData.holdSpeed.toFixed(0) : '---';
+                const decelReached = isActive || isNext && mcdu.holdDecelReached;
+                let holdSpeed = holdResumeExit.additionalData.holdSpeed ? holdResumeExit.additionalData.holdSpeed.toFixed(0) : '---';
+                if (isActive || isNext) {
+                    holdSpeed = mcdu.holdSpeedTarget.toFixed(0);
+                }
                 const turnDirection = holdResumeExit.turnDirection === 1 ? 'L' : 'R';
                 // prompt should only be shown once entering decel for hold (3 - 20 NM before hold)
-                const immExit = !holdResumeExit.additionalData.immExit;
-                const resumeHold = holdResumeExit.additionalData.immExit;
+                const immExit = decelReached && !holdResumeExit.additionalData.immExit;
+                const resumeHold = decelReached && holdResumeExit.additionalData.immExit;
 
                 scrollWindow[rowI] = {
                     fpIndex,
@@ -592,9 +598,14 @@ class CDUFlightPlanPage {
 
                 addRskAt(rowI, 0, (value, scratchpadCallback) => {
                     // IMM EXIT, only active once reaching decel
-                    // TODO delete from F-pln if not yet at holding fix
-                    // else set imm exit flag on the leg
-                    mcdu.addNewMessage(NXFictionalMessages.notYetImplemented);
+                    if (isActive) {
+                        mcdu.fmgcMesssagesListener.triggerToAllSubscribers('A32NX_IMM_EXIT', fpIndex, immExit);
+                        CDUFlightPlanPage.ShowPage(mcdu, offset);
+                    } else if (decelReached) {
+                        fpm.removeWaypoint(fpIndex, true, () => {
+                            CDUFlightPlanPage.ShowPage(mcdu, offset);
+                        });
+                    }
                     scratchpadCallback();
                 });
             }

@@ -452,7 +452,7 @@ export class ManagedFlightPlan {
      * Removes a waypoint from the flight plan.
      * @param index The index of the waypoint to remove.
      */
-    public removeWaypoint(index: number): void {
+    public removeWaypoint(index: number, noDiscontinuity: boolean = false): void {
         let removed = null;
         if (this.originAirfield && index === 0) {
             removed = this.originAirfield;
@@ -488,7 +488,7 @@ export class ManagedFlightPlan {
 
         // transfer a potential discontinuity backward
         const beforeRemoved = this.waypoints[index - 1];
-        if (beforeRemoved && !beforeRemoved.endsInDiscontinuity) {
+        if (!noDiscontinuity && beforeRemoved && !beforeRemoved.endsInDiscontinuity) {
             beforeRemoved.endsInDiscontinuity = true;
             beforeRemoved.discontinuityCanBeCleared = true;
         }

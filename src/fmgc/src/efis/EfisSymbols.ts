@@ -12,7 +12,7 @@ import { GuidanceController } from '@fmgc/guidance/GuidanceController';
 import { PathVector, PathVectorType } from '@fmgc/guidance/lnav/PathVector';
 import { Geo } from '@fmgc/utils/Geo';
 import { SegmentType } from '@fmgc/wtsdk';
-import { LegType, RunwaySurface, VorType } from '../types/fstypes/FSEnums';
+import { LegType, RunwaySurface, TurnDirection, VorType } from '../types/fstypes/FSEnums';
 import { NearbyFacilities } from './NearbyFacilities';
 
 export class EfisSymbols {
@@ -289,6 +289,7 @@ export class EfisSymbols {
 
             // TODO don't send the waypoint before active once FP sequencing is properly implemented
             // (currently sequences with guidance which is too early)
+            // eslint-disable-next-line no-lone-blocks
             {
                 for (let i = activeFp.length - 1; i >= (activeFp.activeWaypointIndex - 1) && i >= 0; i--) {
                     const wp = activeFp.getWaypoint(i);
@@ -323,8 +324,17 @@ export class EfisSymbols {
                     let type = NdSymbolTypeFlags.FlightPlan;
                     const constraints = [];
 
+                    // TODO PI leg
+                    const isCourseReversal = wp.additionalData.legType === LegType.HA || wp.additionalData.legType === LegType.HF || wp.additionalData.legType === LegType.HM;
+
                     if (i === activeFp.activeWaypointIndex) {
                         type |= NdSymbolTypeFlags.ActiveLegTermination;
+                    } else if (isCourseReversal && i !== (activeFp.activeWaypointIndex + 1)) {
+                        if (wp.turnDirection === TurnDirection.Left) {
+                            type |= NdSymbolTypeFlags.CourseReversalLeft;
+                        } else {
+                            type |= NdSymbolTypeFlags.CourseReversalRight;
+                        }
                     }
 
                     if (wp.legAltitudeDescription !== 0) {

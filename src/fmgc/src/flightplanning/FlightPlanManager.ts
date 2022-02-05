@@ -940,11 +940,11 @@ export class FlightPlanManager {
     /**
      * Removes a waypoint from the currently active flight plan.
      * @param index The index of the waypoint to remove.
-     * @param thenSetActive Unused
+     * @param noDiscontinuity Don't create a discontinuity
      * @param callback A callback to call when the operation finishes.
      */
-    public removeWaypoint(index: number, thenSetActive = false, callback = () => { }): void {
-        this._flightPlans[this._currentFlightPlanIndex].removeWaypoint(index);
+    public removeWaypoint(index: number, noDiscontinuity = false, callback = () => { }): void {
+        this._flightPlans[this._currentFlightPlanIndex].removeWaypoint(index, noDiscontinuity);
 
         this.updateFlightPlanVersion().catch(console.error);
         callback();

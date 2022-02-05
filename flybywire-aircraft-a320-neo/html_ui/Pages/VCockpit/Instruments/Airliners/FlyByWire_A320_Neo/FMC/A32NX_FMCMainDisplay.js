@@ -177,6 +177,9 @@ class FMCMainDisplay extends BaseAirliners {
         this.zeroFuelWeightMassCenter = undefined;
         this.activeWpIdx = undefined;
         this.efisSymbols = undefined;
+        this.holdSpeedTarget = undefined;
+        this.holdDecelReached = undefined;
+        this.setHoldSpeedMessageActive = undefined;
     }
 
     Init() {
@@ -500,6 +503,9 @@ class FMCMainDisplay extends BaseAirliners {
         this.blockFuel = undefined;
         this.zeroFuelWeight = undefined;
         this.zeroFuelWeightMassCenter = undefined;
+        this.holdSpeedTarget = undefined;
+        this.holdDecelReached = false;
+        this.setHoldSpeedMessageActive = false;
 
         // Reset SimVars
         SimVar.SetSimVarValue("L:AIRLINER_V1_SPEED", "Knots", NaN);
@@ -527,6 +533,8 @@ class FMCMainDisplay extends BaseAirliners {
         if (SimVar.GetSimVarValue("L:A32NX_AUTOTHRUST_DISABLED", "number") === 1) {
             SimVar.SetSimVarValue("K:A32NX.ATHR_RESET_DISABLE", "number", 1);
         }
+
+        SimVar.SetSimVarValue("L:A32NX_PFD_MSG_SET_HOLD_SPEED", "bool", false);
     }
 
     onUpdate(_deltaTime) {
@@ -724,9 +732,6 @@ class FMCMainDisplay extends BaseAirliners {
     getHoldingSpeed(speedConstraint, altitude = undefined) {
         // TODO unhax, need altitude => speed from vnav if not coded
         const alt = altitude ? altitude : SimVar.GetSimVarValue('INDICATED ALTITUDE', 'feet');
-        // FIXME we assume ISA atmosphere for now, and that we're holding below the tropopause
-        const temperature = 288.15 - 0.0019812 * alt;
-        const pressure = 1013.25 * (temperature / 288.15) ** 5.25588;
 
         let kcas = SimVar.GetSimVarValue('L:A32NX_SPEEDS_GD', 'number');
         if (speedConstraint > 100) {
@@ -750,7 +755,65 @@ class FMCMainDisplay extends BaseAirliners {
             kcas = Math.min(this.managedSpeedLimit, kcas);
         }
 
-        return _convertKCasToKTAS(kcas, temperature, pressure);
+        return kcas;
+    }
+
+    updateHoldingSpeed() {
+        const currentLeg = this.flightPlanManager.getActiveWaypoint();
+        const nextLeg = this.flightPlanManager.getWaypoint(this.flightPlanManager.getActiveWaypointIndex() + 1);
+
+        const casWord = ADIRS.getCalibratedAirspeed();
+        const cas = casWord.isNormalOperation() ? casWord.value : 0;
+
+        let enableHoldSpeedWarning = false;
+        this.holdDecelReached = false;
+        // FIXME big hack until VNAV can do this
+        if (currentLeg && currentLeg.additionalData.legType >= 12 && currentLeg.additionalData.legType <= 14) {
+            this.holdSpeedTarget = this.getHoldingSpeed(currentLeg.speedConstraint);
+            this.holdDecelReached = true;
+            enableHoldSpeedWarning = !Simplane.getAutoPilotAirspeedManaged();
+        } else if (nextLeg && nextLeg.additionalData.legType >= 12 && nextLeg.additionalData.legType <= 14) {
+            const adirLat = ADIRS.getLatitude();
+            const adirLong = ADIRS.getLongitude();
+            if (adirLat.isNormalOperation() && adirLong.isNormalOperation()) {
+                this.holdSpeedTarget = this.getHoldingSpeed(nextLeg.speedConstraint);
+
+                const ppos = {
+                    lat: adirLat.value,
+                    long: adirLong.value,
+                };
+                const stats = this.flightPlanManager.getCurrentFlightPlan().computeWaypointStatistics(ppos);
+                const dtg = stats.get(this.flightPlanManager.getActiveWaypointIndex()).distanceFromPpos;
+                // decel range limits are [3, 20] NM
+                // TODO better decel distance calc
+                const decelDist = Math.min(20, Math.max(3, (cas - this.holdSpeedTarget) * 0.3));
+                if (dtg < decelDist) {
+                    this.holdDecelReached = true;
+                }
+
+                const gsWord = ADIRS.getGroundSpeed();
+                const gs = gsWord.isNormalOperation() ? gsWord.value : 0;
+                const warningDist = decelDist + gs / 120;
+                if (!Simplane.getAutoPilotAirspeedManaged() && dtg <= warningDist) {
+                    enableHoldSpeedWarning = true;
+                }
+            }
+        }
+
+        if (enableHoldSpeedWarning && (cas - this.holdSpeedTarget) > 5) {
+            if (!this.setHoldSpeedMessageActive) {
+                this.addNewMessage(
+                    NXSystemMessages.setHoldSpeed,
+                    () => !this.setHoldSpeedMessageActive,
+                    () => SimVar.SetSimVarValue("L:A32NX_PFD_MSG_SET_HOLD_SPEED", "bool", false),
+                );
+                SimVar.SetSimVarValue("L:A32NX_PFD_MSG_SET_HOLD_SPEED", "bool", true);
+                this.setHoldSpeedMessageActive = true;
+            }
+        } else if (this.setHoldSpeedMessageActive) {
+            SimVar.SetSimVarValue("L:A32NX_PFD_MSG_SET_HOLD_SPEED", "bool", false);
+            this.setHoldSpeedMessageActive = false;
+        }
     }
 
     getManagedTargets(v, m) {
@@ -775,8 +838,7 @@ class FMCMainDisplay extends BaseAirliners {
         let vPfd = 0;
         let isMach = false;
 
-        const currentLeg = this.flightPlanManager.getActiveWaypoint();
-        const nextLeg = this.flightPlanManager.getWaypoint(this.flightPlanManager.getActiveWaypointIndex() + 1);
+        this.updateHoldingSpeed();
 
         if (SimVar.GetSimVarValue("L:A32NX_FMA_EXPEDITE_MODE", "number") === 1) {
             const verticalMode = SimVar.GetSimVarValue("L:A32NX_FMA_VERTICAL_MODE", "number");
@@ -798,27 +860,13 @@ class FMCMainDisplay extends BaseAirliners {
                 this.managedSpeedTarget = SimVar.GetSimVarValue("L:A32NX_FLAPS_HANDLE_INDEX", "Number") === 0 ? Math.min(340, SimVar.GetGameVarValue("FROM MACH TO KIAS", "number", 0.8)) : SimVar.GetSimVarValue("L:A32NX_SPEEDS_VMAX", "number") - 10;
             }
             vPfd = this.managedSpeedTarget;
+        } else if (this.holdDecelReached) {
+            vPfd = this.holdSpeedTarget;
+            this.managedSpeedTarget = this.holdSpeedTarget;
         } else {
-            // FIXME big hack until VNAV can do this
-            if (currentLeg && currentLeg.additionalData.legType >= 12 && currentLeg.additionalData.legType <= 14) {
-                this.managedSpeedTarget = this.getHoldingSpeed(currentLeg.speedConstraint);
-                return;
-            } else if (nextLeg && nextLeg.additionalData.legType >= 12 && nextLeg.additionalData.legType <= 14) {
-                const adirLat = ADIRS.getLatitude();
-                const adirLong = ADIRS.getLongitude();
-                const ppos = (adirLat.isNormalOperation() && adirLong.isNormalOperation()) ? {
-                    lat: ADIRS.getLatitude().value,
-                    long: ADIRS.getLongitude().value,
-                } : {
-                    lat: NaN,
-                    long: NaN
-                };
-                const stats = this.flightPlanManager.getCurrentFlightPlan().computeWaypointStatistics(ppos);
-                // decel range limits are [3, 20] NM, we just punt...
-                if (stats.get(this.flightPlanManager.getActiveWaypointIndex()).distanceFromPpos < 5) {
-                    this.managedSpeedTarget = this.getHoldingSpeed(nextLeg.speedConstraint);
-                    return;
-                }
+            if (this.setHoldSpeedMessageActive) {
+                this.setHoldSpeedMessageActive = false;
+                SimVar.SetSimVarValue("L:A32NX_PFD_MSG_SET_HOLD_SPEED", "bool", false);
             }
 
             switch (this.currentFlightPhase) {
@@ -2187,10 +2235,10 @@ class FMCMainDisplay extends BaseAirliners {
                 this.addNewMessage(NXSystemMessages.notAllowed);
                 return callback(false);
             }
-            this.flightPlanManager.removeWaypoint(index, true, callback);
+            this.flightPlanManager.removeWaypoint(index, false, callback);
         } else {
             this.ensureCurrentFlightPlanIsTemporary(() => {
-                this.flightPlanManager.removeWaypoint(index, true, callback);
+                this.flightPlanManager.removeWaypoint(index, false, callback);
             });
         }
     }

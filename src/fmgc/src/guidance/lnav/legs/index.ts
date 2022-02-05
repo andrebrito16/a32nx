@@ -1,3 +1,4 @@
+import { HALeg, HFLeg, HMLeg } from '@fmgc/guidance/lnav/legs/HX';
 import { Leg } from '@fmgc/guidance/lnav/legs/Leg';
 
 export enum AltitudeConstraintType {
@@ -71,4 +72,8 @@ export function waypointToLocation(wp: WayPoint): LatLongData {
         long: wp.infos.coordinates.long,
     };
     return loc;
+}
+
+export function isCourseReversalLeg(leg: Leg): boolean {
+    return leg instanceof HALeg || leg instanceof HFLeg || leg instanceof HMLeg; // TODO PILeg
 }

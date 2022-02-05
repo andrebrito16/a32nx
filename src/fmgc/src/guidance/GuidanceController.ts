@@ -9,6 +9,7 @@ import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { EfisState } from '@fmgc/guidance/FmsState';
 import { EfisSide, Mode, rangeSettings } from '@shared/NavigationDisplay';
 import { TaskCategory, TaskQueue } from '@fmgc/guidance/TaskQueue';
+import { HMLeg } from '@fmgc/guidance/lnav/legs/HX';
 import { LnavDriver } from './lnav/LnavDriver';
 import { FlightPlanManager, FlightPlans } from '../flightplanning/FlightPlanManager';
 import { GuidanceManager } from './GuidanceManager';
@@ -160,6 +161,16 @@ export class GuidanceController {
         this.lnavDriver.init();
         this.vnavDriver.init();
         this.pseudoWaypoints.init();
+
+        Coherent.on('A32NX_IMM_EXIT', (fpIndex, immExit) => {
+            const leg = this.activeGeometry.legs.get(fpIndex);
+            const tas = SimVar.GetSimVarValue('AIRSPEED TRUE', 'Knots');
+            if (leg instanceof HMLeg) {
+                leg.setImmediateExit(immExit, this.lnavDriver.ppos, tas);
+                this.flightPlanManager.updateFlightPlanVersion();
+                this.automaticSequencing = true;
+            }
+        }, undefined);
     }
 
     private lastFlightPlanVersion = SimVar.GetSimVarValue(FlightPlanManager.FlightPlanVersionKey, 'number');

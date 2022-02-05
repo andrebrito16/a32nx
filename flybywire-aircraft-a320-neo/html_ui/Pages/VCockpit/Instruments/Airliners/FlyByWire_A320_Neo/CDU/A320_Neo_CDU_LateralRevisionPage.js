@@ -94,20 +94,16 @@ class CDULateralRevisionPage {
 
         let holdCell = "";
         if (isWaypoint) {
-            holdCell = "{inop}<HOLD{end}";
+            holdCell = "<HOLD";
             mcdu.leftInputDelay[2] = () => {
                 return mcdu.getDelaySwitchPage();
             };
             mcdu.onLeftInput[2] = () => {
-                if (false) {
-                    const nextLeg = mcdu.flightPlanManager.getWaypoint(waypointIndexFP + 1);
-                    if (nextLeg && nextLeg.additionalData.legType === 14 /* HM */) {
-                        CDUHoldAtPage.ShowPage(mcdu, nextLeg, waypointIndexFP + 1);
-                    } else {
-                        CDUHoldAtPage.ShowPage(mcdu, waypoint, waypointIndexFP);
-                    }
+                const nextLeg = mcdu.flightPlanManager.getWaypoint(waypointIndexFP + 1);
+                if (nextLeg && nextLeg.additionalData.legType === 14 /* HM */) {
+                    CDUHoldAtPage.ShowPage(mcdu, nextLeg, waypointIndexFP + 1);
                 } else {
-                    mcdu.addNewMessage(NXFictionalMessages.notYetImplemented);
+                    CDUHoldAtPage.ShowPage(mcdu, waypoint, waypointIndexFP);
                 }
             };
         }

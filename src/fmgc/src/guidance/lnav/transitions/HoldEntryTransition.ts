@@ -169,9 +169,18 @@ export class HoldEntryTransition extends Transition {
         return params;
     }
 
-    getDirectGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, _tas: Knots): GuidanceParameters {
+    getDirectGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
+        const dtg = arcDistanceToGo(ppos, this.turn1.itp, this.turn1.arcCentre, this.turn1.sweepAngle);
+        if (dtg <= 0.05) {
+            this.state = EntryState.Capture;
+        }
         // TODO RAD for straight part to outbound
-        return arcGuidance(ppos, trueTrack, this.turn1.itp, this.turn1.arcCentre, this.turn1.sweepAngle);
+        const params = arcGuidance(ppos, trueTrack, this.turn1.itp, this.turn1.arcCentre, this.turn1.sweepAngle);
+        const rad = Geometry.getRollAnticipationDistance(tas, (params as LateralPathGuidance).phiCommand, 0);
+        if (rad > 0 && dtg <= rad) {
+            (params as LateralPathGuidance).phiCommand = 0;
+        }
+        return params;
     }
 
     getGuidanceParameters(ppos: LatLongAlt, trueTrack: Degrees, tas: Knots): GuidanceParameters {
@@ -396,7 +405,12 @@ export class HoldEntryTransition extends Transition {
 
         // TODO should be 1.15 minus turn 1 distance
         const straightDistance = 0.85 * this.nextLeg.computeLegDistance();
-        this.turn2.itp = Avionics.Utils.bearingDistanceToCoordinates(this.outboundCourse + (this.nextLeg.turnDirection === TurnDirection.Right ? 150 : 210), straightDistance, this.turn1.ftp.lat, this.turn1.ftp.long);
+        this.turn2.itp = Avionics.Utils.bearingDistanceToCoordinates(
+            this.outboundCourse + (this.nextLeg.turnDirection === TurnDirection.Right ? 150 : 210),
+            straightDistance,
+            this.turn1.ftp.lat,
+            this.turn1.ftp.long,
+        );
         this.predictedPath.push({
             type: PathVectorType.Line,
             startPoint: this.turn1.ftp,
@@ -409,7 +423,12 @@ export class HoldEntryTransition extends Transition {
             radius,
             this.turn2.itp.lat, this.turn2.itp.long,
         );
-        this.turn2.ftp = Avionics.Utils.bearingDistanceToCoordinates(this.outboundCourse + (this.nextLeg.turnDirection === TurnDirection.Right ? -45 : 45), radius, this.turn2.arcCentre.lat, this.turn2.arcCentre.long);
+        this.turn2.ftp = Avionics.Utils.bearingDistanceToCoordinates(
+            this.outboundCourse + (this.nextLeg.turnDirection === TurnDirection.Right ? -45 : 45),
+            radius,
+            this.turn2.arcCentre.lat,
+            this.turn2.arcCentre.long,
+        );
         this.turn2.sweepAngle = this.nextLeg.turnDirection === TurnDirection.Right ? 285 : -285;
 
         this.predictedPath.push({
@@ -498,7 +517,7 @@ export class HoldEntryTransition extends Transition {
             sweepAngle: this.turn1.sweepAngle,
         });
 
-        const turn1Rads = this.turn1.sweepAngle * Math.PI / 180;
+        // const turn1Rads = this.turn1.sweepAngle * Math.PI / 180;
         const straightDistance = 1.15 * this.nextLeg.computeLegDistance(); // - radius * Math.abs(Math.sin(turn1Rads));
         this.turn2.itp = Avionics.Utils.bearingDistanceToCoordinates(this.outboundCourse + 180, straightDistance, this.turn1.ftp.lat, this.turn1.ftp.long);
         this.predictedPath.push({

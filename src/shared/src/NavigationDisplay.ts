@@ -50,6 +50,8 @@ export enum NdSymbolTypeFlags {
     FlightPlanVectorArc = 1 << 21,
     FlightPlanVectorDebugPoint = 1 << 22,
     ActiveFlightPlanVector = 1 << 23,
+    CourseReversalLeft = 1 << 24,
+    CourseReversalRight = 1 << 25,
 }
 
 export interface NdSymbol {

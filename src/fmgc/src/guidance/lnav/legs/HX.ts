@@ -97,9 +97,10 @@ export class HMLeg extends XFLeg {
 
     /**
      * Use for IMM EXIT set/reset function on the MCDU
+     * Note: if IMM EXIT is set before this leg is active it should be deleted from the f-pln instead
      * @param
      */
-    setImmediateExit(exit: boolean, ppos: LatLongData): void {
+    setImmediateExit(exit: boolean, ppos: LatLongData, tas: Knots): void {
         if (exit) {
             switch (this.state) {
             case HxLegGuidanceState.Arc1:
@@ -107,9 +108,11 @@ export class HMLeg extends XFLeg {
                 this.immExitLength = 0;
                 break;
             case HxLegGuidanceState.Outbound:
-                const { fixA } = this.computeGeometry();
+                const { fixA, sweepAngle } = this.computeGeometry();
+                const nextPhi = sweepAngle > 0 ? maxBank(tas, true) : -maxBank(tas, true);
                 // TODO maybe need a little anticipation distance added.. we will start off with XTK and should already be at or close to max bank...
-                this.immExitLength = courseToFixDistanceToGo(ppos, this.inboundLegCourse, fixA);
+                const rad = Geometry.getRollAnticipationDistance(tas, 0, nextPhi);
+                this.immExitLength = rad + courseToFixDistanceToGo(ppos, this.inboundLegCourse, fixA);
                 break;
             case HxLegGuidanceState.Arc2:
             case HxLegGuidanceState.Inbound:
@@ -124,6 +127,11 @@ export class HMLeg extends XFLeg {
         this.to.additionalData.immExit = exit;
 
         this.immExitRequested = exit;
+
+        // if resuming hold, the geometry will be recomputed on the next pass of the hold fix
+        if (exit) {
+            this.geometry = this.computeGeometry();
+        }
     }
 
     /**
@@ -335,6 +343,9 @@ export class HMLeg extends XFLeg {
 
         if (dtg <= 0) {
             if (this.state === HxLegGuidanceState.Inbound) {
+                if (this.immExitRequested) {
+                    return;
+                }
                 this.updatePrediction(tas);
             }
             this.state = (this.state + 1) % (HxLegGuidanceState.Arc2 + 1);
@@ -432,7 +443,7 @@ export class HMLeg extends XFLeg {
     }
 
     get disableAutomaticSequencing(): boolean {
-        return true;
+        return !this.immExitRequested;
     }
 
     get repr(): string {

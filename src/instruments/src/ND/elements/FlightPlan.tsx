@@ -216,6 +216,21 @@ const RunwayMarkerFar: FC<Omit<RunwayMarkerProps, 'lengthPx'>> = memo(({ ident, 
     );
 });
 
+// TODO are we rotated by the leg course?
+const CourseReversalMarker: FC<{ left: boolean }> = memo(({ left }) => {
+    const arcEnd = left ? -42 : 42;
+    return (
+        <g className="White">
+            <path d={`M0,0 a21,21 0 0 ${left ? 0 : 1} ${arcEnd},0`} className="shadow" strokeWidth={2.5} />
+            <line x1={arcEnd} x2={arcEnd - 4} y1={0} y2={-4} className="shadow" strokeWidth={2.5} />
+            <line x1={arcEnd} x2={arcEnd + 4} y1={0} y2={-4} className="shadow" strokeWidth={2.5} />
+            <path d={`M0,0 a21,21 0 0 ${left ? 0 : 1} ${arcEnd},0`} strokeWidth={2} />
+            <line x1={arcEnd} x2={arcEnd - 4} y1={0} y2={-4} strokeWidth={2} />
+            <line x1={arcEnd} x2={arcEnd + 4} y1={0} y2={-4} strokeWidth={2} />
+        </g>
+    );
+});
+
 interface SymbolMarkerProps {
     ident: string,
     x: number,
@@ -294,6 +309,10 @@ const SymbolMarker: FC<SymbolMarkerProps> = memo(({ ident, x, y, endX, endY, arc
         elements.push(...constraints.map((t) => (
             <text x={15} y={constraintY += 17} className="Magenta shadow" fontSize={20}>{t}</text>
         )));
+    }
+
+    if (type & (NdSymbolTypeFlags.CourseReversalLeft | NdSymbolTypeFlags.CourseReversalRight)) {
+        elements.push(<CourseReversalMarker left={(type & NdSymbolTypeFlags.CourseReversalLeft) > 0} />);
     }
 
     let showIdent = false;

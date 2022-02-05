@@ -1204,6 +1204,10 @@
         - L
         - R
 
+- A32NX_PFD_MSG_SET_HOLD_SPEED
+    - Bool
+    - Indicates if the SET HOLD SPEED message is shown on the PFD
+
 - A32NX_ISIS_LS_ACTIVE
 	- Bool
 	- Indicates whether LS scales are shown on the ISIS
