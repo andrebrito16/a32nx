@@ -33,7 +33,7 @@ export const TcasWxrMessages: FC<{ modeIndex: Mode}> = ({ modeIndex }) => {
     // TODO use logic in TCAS when it's implemented
     const [tcasPosition] = useSimVar('L:A32NX_SWITCH_TCAS_Position', 'enum', 500);
     const [radioAlt] = useSimVar('PLANE ALT ABOVE GROUND MINUS CG', 'feet', 500);
-    if (tcasPosition === TcasPosition.Ta || (tcasPosition === TcasPosition.TaRa && radioAlt < 1000)) {
+    if (tcasPosition === tcasPosition.Ta || (tcasPosition === tcasPosition.TaRa && radioAlt < 1000)) {
         centerMessage = { text: 'TA ONLY', color: 'White' };
     }
 
