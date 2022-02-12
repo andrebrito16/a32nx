@@ -13,7 +13,7 @@ class CDUProgressPage {
         const gpsPrimaryStatus = adirsUsesGpsAsPrimary ? "{green}GPS PRIMARY{end}" : "";
         let flCrz = "-----";
         let vDevCell = "";
-        switch (mcdu.currentFlightPhase) {
+        switch (mcdu.flightPhaseManager.phase) {
             case FmgcFlightPhases.PREFLIGHT:
             case FmgcFlightPhases.TAKEOFF: {
                 if (mcdu._cruiseEntered) {

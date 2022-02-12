@@ -1,28 +1,31 @@
 import { VerticalCheckpoint, VerticalCheckpointReason } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
 import { BaseGeometryProfile } from '@fmgc/guidance/vnav/profile/BaseGeometryProfile';
 import { SpeedProfile } from '@fmgc/guidance/vnav/climb/SpeedProfile';
-import { Predictions, StepResults } from '@fmgc/guidance/vnav/Predictions';
-import { FlapConf } from '@fmgc/guidance/vnav/common';
 import { AtmosphericConditions } from '@fmgc/guidance/vnav/AtmosphericConditions';
 import { VerticalProfileComputationParametersObserver } from '@fmgc/guidance/vnav/VerticalProfileComputationParameters';
-import { Constants } from '@shared/Constants';
 import { GeometricPathBuilder } from '@fmgc/guidance/vnav/descent/GeometricPathBuilder';
+import { DescentStrategy, IdleDescentStrategy } from '@fmgc/guidance/vnav/descent/DescentStrategy';
+import { StepResults } from '@fmgc/guidance/vnav/Predictions';
 
 export class DescentPathBuilder {
     private geometricPathBuilder: GeometricPathBuilder;
+
+    private idleDescentStrategy: DescentStrategy;
 
     constructor(
         private computationParametersObserver: VerticalProfileComputationParametersObserver,
         private atmosphericConditions: AtmosphericConditions,
     ) {
         this.geometricPathBuilder = new GeometricPathBuilder(computationParametersObserver, atmosphericConditions);
+
+        this.idleDescentStrategy = new IdleDescentStrategy(computationParametersObserver, atmosphericConditions);
     }
 
     update() {
         this.atmosphericConditions.update();
     }
 
-    computeDescentPath(profile: BaseGeometryProfile, speedProfile: SpeedProfile, cruiseAltitude: Feet): VerticalCheckpoint {
+    computeManagedDescentPath(profile: BaseGeometryProfile, speedProfile: SpeedProfile, cruiseAltitude: Feet): VerticalCheckpoint {
         const decelCheckpoint = profile.checkpoints.find((checkpoint) => checkpoint.reason === VerticalCheckpointReason.Decel);
 
         if (!decelCheckpoint) {
@@ -53,25 +56,67 @@ export class DescentPathBuilder {
         // Assume the last checkpoint is the start of the geometric path
         profile.addCheckpointFromLast((lastCheckpoint) => ({ ...lastCheckpoint, reason: VerticalCheckpointReason.IdlePathEnd }));
 
-        for (let altitude = profile.lastCheckpoint.altitude; altitude < topOfDescentAltitude; altitude = Math.min(altitude + 1500, topOfDescentAltitude)) {
-            const lastCheckpoint = profile.lastCheckpoint;
+        const { managedDescentSpeedMach } = this.computationParametersObserver.get();
+
+        const speedConstraints = profile.descentSpeedConstraints.slice().sort((a, b) => b.distanceFromStart - a.distanceFromStart);
+        let i = 0;
+        while (i++ < 50 && speedConstraints.length > 0) {
+            const constraint = speedConstraints[0];
+            const { distanceFromStart, remainingFuelOnBoard, speed, altitude } = profile.lastCheckpoint;
+
+            if (constraint.distanceFromStart >= distanceFromStart) {
+                speedConstraints.splice(0, 1);
+                continue;
+            }
+
+            const speedTargetBeforeCurrentPosition = speedProfile.getTarget(constraint.distanceFromStart, altitude);
+            // It is safe to use the current altitude here. This way, the speed limit will certainly be obeyed
+            if (speedTargetBeforeCurrentPosition - speed > 1) {
+                const decelerationStep = this.idleDescentStrategy.predictToSpeedBackwards(altitude, speed, speedTargetBeforeCurrentPosition, managedDescentSpeedMach, remainingFuelOnBoard);
+                this.addCheckpointFromStepBackwards(profile, decelerationStep, VerticalCheckpointReason.IdlePathAtmosphericConditions);
+
+                continue;
+            }
+
+            const descentStep = this.idleDescentStrategy.predictToDistanceBackwards(altitude,
+                profile.lastCheckpoint.distanceFromStart - constraint.distanceFromStart,
+                speed,
+                managedDescentSpeedMach,
+                remainingFuelOnBoard);
+
+            this.addCheckpointFromStepBackwards(profile, descentStep, VerticalCheckpointReason.IdlePathAtmosphericConditions);
+        }
+
+        let j = 0;
+        for (let altitude = profile.lastCheckpoint.altitude; altitude < topOfDescentAltitude && j++ < 50; altitude = Math.min(altitude + 1500, topOfDescentAltitude)) {
+            const { distanceFromStart, remainingFuelOnBoard, speed } = profile.lastCheckpoint;
 
             const startingAltitudeForSegment = Math.min(altitude + 1500, topOfDescentAltitude);
-            const speed = speedProfile.getTarget(lastCheckpoint.distanceFromStart, startingAltitudeForSegment);
+            // Get target slightly before to figure out if we want to accelerate
+            const speedTarget = speedProfile.getTarget(distanceFromStart - 1e-4, altitude);
 
-            // TODO: Use fuel at start of segment
-            const remainingFuelOnBoard = lastCheckpoint.remainingFuelOnBoard;
+            if ((speedTarget - speed) > 1) {
+                const decelerationStep = this.idleDescentStrategy.predictToSpeedBackwards(altitude, speed, speedTarget, managedDescentSpeedMach, remainingFuelOnBoard);
 
-            const { distanceTraveled, fuelBurned, timeElapsed } = this.computeIdlePathSegmentPrediction(startingAltitudeForSegment, altitude, speed, remainingFuelOnBoard);
+                // If we shoot through the final altitude trying to accelerate, pretend we didn't accelerate all the way
+                if (decelerationStep.initialAltitude > topOfDescentAltitude) {
+                    const scaling = (decelerationStep.initialAltitude - decelerationStep.finalAltitude) === 0
+                        ? (topOfDescentAltitude - decelerationStep.finalAltitude) / (decelerationStep.initialAltitude - decelerationStep.finalAltitude)
+                        : 0;
 
-            profile.checkpoints.push({
-                reason: VerticalCheckpointReason.IdlePathAtmosphericConditions,
-                distanceFromStart: lastCheckpoint.distanceFromStart - distanceTraveled,
-                secondsFromPresent: lastCheckpoint.secondsFromPresent - (timeElapsed * 60),
-                altitude: startingAltitudeForSegment,
-                remainingFuelOnBoard: remainingFuelOnBoard + fuelBurned,
-                speed,
-            });
+                    this.scaleStep(decelerationStep, scaling);
+                }
+
+                this.addCheckpointFromStepBackwards(profile, decelerationStep, VerticalCheckpointReason.IdlePathAtmosphericConditions);
+
+                // Stupid hack
+                // WILO: Figure out why this causes an infinite loop
+                altitude = profile.lastCheckpoint.altitude - 1500;
+                continue;
+            }
+
+            const step = this.idleDescentStrategy.predictToAltitude(startingAltitudeForSegment, altitude, speed, managedDescentSpeedMach, remainingFuelOnBoard);
+            this.addCheckpointFromStepBackwards(profile, step, VerticalCheckpointReason.IdlePathAtmosphericConditions);
         }
 
         if (profile.lastCheckpoint.reason === VerticalCheckpointReason.IdlePathAtmosphericConditions) {
@@ -81,27 +126,24 @@ export class DescentPathBuilder {
         }
     }
 
-    private computeIdlePathSegmentPrediction(startingAltitude: Feet, targetAltitude: Feet, climbSpeed: Knots, remainingFuelOnBoard: number): StepResults {
-        const { zeroFuelWeight, perfFactor, tropoPause, managedDescentSpeedMach } = this.computationParametersObserver.get();
+    private addCheckpointFromStepBackwards(profile: BaseGeometryProfile, step: StepResults, reason: VerticalCheckpointReason) {
+        // Because we assume we are computing the profile backwards, there's a lot of minus signs where one might expect a plus
+        profile.addCheckpointFromLast(({ distanceFromStart, secondsFromPresent, remainingFuelOnBoard }) => ({
+            reason,
+            distanceFromStart: distanceFromStart - step.distanceTraveled,
+            altitude: step.initialAltitude,
+            secondsFromPresent: secondsFromPresent - (step.timeElapsed * 60),
+            speed: step.speed,
+            remainingFuelOnBoard: remainingFuelOnBoard + step.fuelBurned,
+        }));
+    }
 
-        const midwayAltitudeClimb = (startingAltitude + targetAltitude) / 2;
-
-        const predictedN1 = 26 + ((targetAltitude / midwayAltitudeClimb) * (30 - 26));
-
-        return Predictions.altitudeStep(
-            startingAltitude,
-            targetAltitude - startingAltitude,
-            climbSpeed,
-            managedDescentSpeedMach,
-            predictedN1,
-            zeroFuelWeight * Constants.TONS_TO_POUNDS,
-            remainingFuelOnBoard,
-            0,
-            this.atmosphericConditions.isaDeviation,
-            tropoPause,
-            false,
-            FlapConf.CLEAN,
-            perfFactor,
-        );
+    // TODO: Rethink the existence of thsi
+    private scaleStep(step: StepResults, scaling: number) {
+        step.distanceTraveled *= scaling;
+        step.fuelBurned *= scaling;
+        step.timeElapsed *= scaling;
+        step.finalAltitude *= scaling;
+        step.speed *= scaling;
     }
 }

@@ -13,7 +13,8 @@ export class SelectedGeometryProfile extends BaseGeometryProfile {
     public override distanceToPresentPosition: number = 0;
 
     private checkpointsToShowAlongFlightPlan: Set<VerticalCheckpointReason> = new Set([
-        VerticalCheckpointReason.TopOfClimb,
+        VerticalCheckpointReason.CrossingFcuAltitudeClimb,
+        VerticalCheckpointReason.CrossingFcuAltitudeDescent,
         VerticalCheckpointReason.CrossingSpeedLimit,
     ])
 

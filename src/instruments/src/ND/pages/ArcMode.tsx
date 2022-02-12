@@ -82,7 +82,8 @@ export const ArcMode: React.FC<ArcModeProps> = ({ symbols, adirsAlign, rangeSett
 
                         { (((fmaLatMode === LateralMode.NONE
                             || fmaLatMode === LateralMode.HDG
-                            || fmaLatMode === LateralMode.TRACK) && !fmaLatArmed)) && (
+                            || fmaLatMode === LateralMode.TRACK)
+                            && !isArmed(armedLateralBitmask, ArmedLateralMode.NAV)) && (
                             <TrackLine x={384} y={620} heading={heading} track={track} groundSpeed={Number(MathUtils.fastToFixed(groundSpeed, 2))} mapParams={mapParams} symbols={symbols} />
                         )}
                     </g>
