@@ -106,8 +106,8 @@ const PitchTrim = ({ x, y }: ComponentPositionProps) => {
 };
 
 const Rudder = ({ x, y }: ComponentPositionProps) => {
-    const [rudderDeflectionState] = useSimVar('RUDDER DEFLECTION PCT', 'percent over 100', 50);
-    const rudderAngle = -rudderDeflectionState * 25;
+    const [rudderDeflectionState] = useSimVar('L:A32NX_HYD_RUDDER_DEFLECTION', 'Percent', 50);
+    const rudderAngle = -rudderDeflectionState * 25 / 100;
 
     // Rudder limits
     const [indicatedAirspeedState] = useSimVar('AIRSPEED INDICATED', 'knots', 500);

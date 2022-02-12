@@ -10,9 +10,9 @@ import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { Geometry } from '@fmgc/guidance/Geometry';
 import { GuidanceController } from '@fmgc/guidance/GuidanceController';
 import { PathVector, PathVectorType } from '@fmgc/guidance/lnav/PathVector';
-import { Geo } from '@fmgc/utils/Geo';
 import { SegmentType } from '@fmgc/wtsdk';
-import { NavGeometryProfile, VerticalWaypointPrediction } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
+import { distanceTo } from 'msfs-geo';
+import { VerticalWaypointPrediction } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
 import { LegType, RunwaySurface, TurnDirection, VorType } from '../types/fstypes/FSEnums';
 import { NearbyFacilities } from './NearbyFacilities';
 
@@ -365,12 +365,12 @@ export class EfisSymbols {
                     if (!isBehindAircraft && wp.legAltitudeDescription !== 0) {
                         const predictionAtWaypoint = waypointPredictions.get(i);
 
-                        if (!predictionAtWaypoint) {
-                            type |= NdSymbolTypeFlags.ConstraintUnknown;
-                        } else if (predictionAtWaypoint.isAltitudeConstraintMet) {
-                            type |= NdSymbolTypeFlags.ConstraintMet;
-                        } else {
-                            type |= NdSymbolTypeFlags.ConstraintMissed;
+                        type |= NdSymbolTypeFlags.Constraint;
+
+                        if (predictionAtWaypoint?.isAltitudeConstraintMet) {
+                            type |= NdSymbolTypeFlags.MagentaColor;
+                        } else if (predictionAtWaypoint) {
+                            type |= NdSymbolTypeFlags.AmberColor;
                         }
                     }
 
@@ -495,7 +495,7 @@ export class EfisSymbols {
 
         if (vector.type === PathVectorType.Arc) {
             symbol.arcEnd = vector.endPoint;
-            symbol.arcRadius = Geo.getDistance(vector.startPoint, vector.centrePoint);
+            symbol.arcRadius = distanceTo(vector.startPoint, vector.centrePoint);
             symbol.arcSweepAngle = vector.sweepAngle;
         }
 

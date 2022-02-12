@@ -9,6 +9,7 @@ import { TcasComponent } from '@tcas/lib/TcasComponent';
 import { LatLongData } from '@typings/fs-base-ui/html_ui/JS/Types';
 import { LocalSimVar } from '@shared/simvar';
 import { NXDataStore } from '@shared/persistence';
+import stringify from 'safe-stable-stringify';
 import {
     TCAS_CONST as TCAS, JS_NPCPlane,
     TcasState, TcasMode, XpdrMode, TcasThreat,
@@ -1026,7 +1027,7 @@ export class TcasComputer implements TcasComponent {
             }
         });
 
-        this.sendListener.triggerToAllSubscribers('A32NX_TCAS_TRAFFIC', this.sendAirTraffic);
+        this.sendListener.triggerToAllSubscribers('A32NX_TCAS_TRAFFIC', stringify(this.sendAirTraffic));
     }
 
     update(_deltaTime: number): void {
@@ -1042,7 +1043,7 @@ export class TcasComputer implements TcasComponent {
         if (this.tcasMode.getVar() === TcasMode.STBY) {
             if (this.sendAirTraffic.length !== 0) {
                 this.sendAirTraffic.length = 0;
-                this.sendListener.triggerToAllSubscribers('A32NX_TCAS_TRAFFIC', this.sendAirTraffic);
+                this.sendListener.triggerToAllSubscribers('A32NX_TCAS_TRAFFIC', stringify(this.sendAirTraffic));
             }
             return;
         }

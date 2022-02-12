@@ -314,10 +314,14 @@ export abstract class BaseGeometryProfile {
 
         const CHECKPOINTS_TO_DRAW_ON_ND = new Set([
             VerticalCheckpointReason.TopOfClimb,
-            VerticalCheckpointReason.LevelOffForConstraint,
+            VerticalCheckpointReason.LevelOffForClimbConstraint,
             VerticalCheckpointReason.ContinueClimb,
-            VerticalCheckpointReason.CrossingFcuAltitude,
+            VerticalCheckpointReason.CrossingFcuAltitudeClimb,
             VerticalCheckpointReason.TopOfDescent,
+            VerticalCheckpointReason.CrossingFcuAltitudeDescent,
+            VerticalCheckpointReason.LevelOffForDescentConstraint,
+            VerticalCheckpointReason.InterceptDescentProfileManaged,
+            VerticalCheckpointReason.InterceptDescentProfileSelected,
             VerticalCheckpointReason.Decel,
             VerticalCheckpointReason.Flaps1,
             VerticalCheckpointReason.Flaps2,

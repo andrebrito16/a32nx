@@ -22,7 +22,7 @@ import { TurnDirection } from '@fmgc/types/fstypes/FSEnums';
 import { arcLength, maxBank, maxTad, sideOfPointOnCourseToFix } from '@fmgc/guidance/lnav/CommonGeometry';
 import { ControlLaw } from '@shared/autopilot';
 import { AFLeg } from '@fmgc/guidance/lnav/legs/AF';
-import { distanceTo, placeBearingDistance } from 'msfs-geo';
+import { bearingTo, distanceTo, placeBearingDistance } from 'msfs-geo';
 import { Leg } from '../legs/Leg';
 import { CFLeg } from '../legs/CF';
 import { CRLeg } from '../legs/CR';
@@ -59,7 +59,7 @@ export class PathCaptureTransition extends Transition {
     }
 
     get turnDirection(): TurnDirection {
-        return this.nextLeg.constrainedTurnDirection;
+        return this.nextLeg.metadata.turnDirection;
     }
 
     get deltaTrack(): Degrees {
@@ -118,7 +118,7 @@ export class PathCaptureTransition extends Transition {
         }
 
         const distanceFromItp: NauticalMiles = Geo.distanceToLeg(initialTurningPoint, this.nextLeg);
-        const deltaTrack: Degrees = MathUtils.diffAngle(targetTrack, this.nextLeg.inboundCourse, this.nextLeg.constrainedTurnDirection);
+        const deltaTrack: Degrees = MathUtils.diffAngle(targetTrack, this.nextLeg.inboundCourse, this.nextLeg.metadata.turnDirection);
 
         this.predictedPath.length = 0;
 
@@ -157,26 +157,26 @@ export class PathCaptureTransition extends Transition {
         const distanceLimit = radius * cos(48);
 
         // TODO: Turn center is slightly off for some reason, fix
-        let turnCenter = Geo.computeDestinationPoint(initialTurningPoint, radius, targetTrack + turnDirection * 90);
-        let turnCenterDistance = Math.sign(MathUtils.diffAngle(Geo.getGreatCircleBearing(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
+        let turnCenter = placeBearingDistance(initialTurningPoint, targetTrack + turnDirection * 90, radius);
+        let turnCenterDistance = Math.sign(MathUtils.diffAngle(bearingTo(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
             * Geo.distanceToLeg(turnCenter, this.nextLeg);
 
         let courseChange;
         if (Math.abs(deltaTrack) < 45) {
             if ((deltaTrack > 0 && turnCenterDistance >= radius) || (deltaTrack < 0 && turnCenterDistance <= -radius)) {
-                turnCenter = Geo.computeDestinationPoint(initialTurningPoint, radius, targetTrack - turnDirection * 90);
+                turnCenter = placeBearingDistance(initialTurningPoint, targetTrack - turnDirection * 90, radius);
                 turnDirection = -turnDirection;
                 // Turn direction is to be flipped, FBW-22-05
-                turnCenterDistance = Math.sign(MathUtils.diffAngle(Geo.getGreatCircleBearing(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
+                turnCenterDistance = Math.sign(MathUtils.diffAngle(bearingTo(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
                     * Geo.distanceToLeg(turnCenter, this.nextLeg);
                 courseChange = CourseChange.acuteFar(turnDirection, turnCenterDistance, deltaTrack);
             } else {
                 courseChange = CourseChange.acuteNear(turnDirection, turnCenterDistance, deltaTrack);
             }
-        } else if (Math.abs(deltaTrack) >= 45 && !compareTurnDirections(turnDirection, this.nextLeg.constrainedTurnDirection)) {
-            turnCenter = Geo.computeDestinationPoint(initialTurningPoint, radius, targetTrack - turnDirection * 90);
+        } else if (Math.abs(deltaTrack) >= 45 && !compareTurnDirections(turnDirection, this.nextLeg.metadata.turnDirection)) {
+            turnCenter = placeBearingDistance(initialTurningPoint, targetTrack - turnDirection * 90, radius);
             turnDirection = -turnDirection;
-            turnCenterDistance = Math.sign(MathUtils.diffAngle(Geo.getGreatCircleBearing(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
+            turnCenterDistance = Math.sign(MathUtils.diffAngle(bearingTo(turnCenter, this.nextLeg.getPathEndPoint()), this.nextLeg.outboundCourse))
                 * Geo.distanceToLeg(turnCenter, this.nextLeg);
         }
 
@@ -195,42 +195,51 @@ export class PathCaptureTransition extends Transition {
             }
 
             if (!Number.isNaN(intercept.lat)) {
-                this.itp = initialTurningPoint;
-                this.ftp = intercept;
+                const bearingTcFtp = bearingTo(turnCenter, intercept);
 
-                this.predictedPath.push({
-                    type: PathVectorType.Arc,
-                    startPoint: initialTurningPoint,
-                    endPoint: intercept,
-                    centrePoint: turnCenter,
-                    sweepAngle: Math.abs(deltaTrack) * turnDirection,
-                });
+                const angleToLeg = MathUtils.diffAngle(
+                    Avionics.Utils.clampAngle(bearingTcFtp - (turnDirection > 0 ? -90 : 90)),
+                    this.nextLeg.outboundCourse,
+                );
 
-                this.distance = arcLength(radius, Math.abs(deltaTrack) * turnDirection);
+                if (Math.abs(angleToLeg) <= 48) {
+                    this.itp = initialTurningPoint;
+                    this.ftp = intercept;
 
-                if (LnavConfig.DEBUG_PREDICTED_PATH) {
-                    this.predictedPath.push(
-                        {
-                            type: PathVectorType.DebugPoint,
-                            startPoint: initialTurningPoint,
-                            annotation: 'PATH CAPTURE ARC START',
-                        },
-                        {
-                            type: PathVectorType.DebugPoint,
-                            startPoint: turnCenter,
-                            annotation: 'PATH CAPTURE CENTRE',
-                        },
-                        {
-                            type: PathVectorType.DebugPoint,
-                            startPoint: intercept,
-                            annotation: 'PATH CAPTURE INTCPT',
-                        },
-                    );
+                    this.predictedPath.push({
+                        type: PathVectorType.Arc,
+                        startPoint: initialTurningPoint,
+                        endPoint: intercept,
+                        centrePoint: turnCenter,
+                        sweepAngle: Math.abs(deltaTrack) * turnDirection,
+                    });
+
+                    this.distance = arcLength(radius, Math.abs(deltaTrack) * turnDirection);
+
+                    if (LnavConfig.DEBUG_PREDICTED_PATH) {
+                        this.predictedPath.push(
+                            {
+                                type: PathVectorType.DebugPoint,
+                                startPoint: initialTurningPoint,
+                                annotation: 'PATH CAPTURE ARC START',
+                            },
+                            {
+                                type: PathVectorType.DebugPoint,
+                                startPoint: turnCenter,
+                                annotation: 'PATH CAPTURE CENTRE',
+                            },
+                            {
+                                type: PathVectorType.DebugPoint,
+                                startPoint: intercept,
+                                annotation: 'PATH CAPTURE INTCPT',
+                            },
+                        );
+                    }
+
+                    this.isComputed = true;
+
+                    return;
                 }
-
-                this.isComputed = true;
-
-                return;
             }
         }
 
@@ -241,7 +250,7 @@ export class PathCaptureTransition extends Transition {
                 courseChange = CourseChange.acuteNear(turnDirection, turnCenterDistance, deltaTrack);
             }
         } else {
-            const isReverse = !compareTurnDirections(naturalTurnDirectionSign, this.nextLeg.constrainedTurnDirection);
+            const isReverse = !compareTurnDirections(naturalTurnDirectionSign, this.nextLeg.metadata.turnDirection);
 
             if (isReverse) {
                 courseChange = CourseChange.reverse(turnDirection, turnCenterDistance, deltaTrack, radius);
@@ -250,7 +259,7 @@ export class PathCaptureTransition extends Transition {
             }
         }
 
-        const finalTurningPoint = Geo.computeDestinationPoint(turnCenter, radius, targetTrack + courseChange - 90 * turnDirection);
+        const finalTurningPoint = placeBearingDistance(turnCenter, targetTrack + courseChange - 90 * turnDirection, radius);
         const interceptPoint = Geo.legIntercept(finalTurningPoint, targetTrack + courseChange, this.nextLeg);
 
         const overshot = sideOfPointOnCourseToFix(finalTurningPoint, targetTrack + courseChange, interceptPoint) === -1;
@@ -372,7 +381,7 @@ export class PathCaptureTransition extends Transition {
 
     getGuidanceParameters(ppos: LatLongAlt, trueTrack: number, tas: Knots): GuidanceParameters | null {
         if (this.forcedTurnRequired) {
-            const turnSign = this.nextLeg.constrainedTurnDirection === TurnDirection.Left ? -1 : 1;
+            const turnSign = this.nextLeg.metadata.turnDirection === TurnDirection.Left ? -1 : 1;
             let trackAngleError = this.nextLeg.inboundCourse - trueTrack;
             if (turnSign !== Math.sign(trackAngleError)) {
                 trackAngleError += turnSign * 360;
@@ -389,7 +398,7 @@ export class PathCaptureTransition extends Transition {
             this.forcedTurnComplete = true;
         }
 
-        return this.nextLeg.getGuidanceParameters(ppos, trueTrack);
+        return this.nextLeg.getGuidanceParameters(ppos, trueTrack, tas);
     }
 
     getNominalRollAngle(_gs: Knots): Degrees {

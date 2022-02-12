@@ -1,7 +1,7 @@
 import { BaseGeometryProfile } from '@fmgc/guidance/vnav/profile/BaseGeometryProfile';
 import { ConstraintReader } from '@fmgc/guidance/vnav/ConstraintReader';
 import { Geometry } from '../../Geometry';
-import { AltitudeConstraint, AltitudeConstraintType, SpeedConstraint, SpeedConstraintType } from '../../lnav/legs';
+import { AltitudeConstraint, AltitudeConstraintType, PathAngleConstraint, SpeedConstraint, SpeedConstraintType } from '../../lnav/legs';
 
 // TODO: Merge this with VerticalCheckpoint
 export interface VerticalWaypointPrediction {
@@ -25,12 +25,12 @@ export enum VerticalCheckpointReason {
     TopOfClimb = 'TopOfClimb',
     AtmosphericConditions = 'AtmosphericConditions',
     PresentPosition = 'PresentPosition',
-    LevelOffForConstraint = 'LevelOffForConstraint',
+    LevelOffForClimbConstraint = 'LevelOffForClimbConstraint',
     AltitudeConstraint = 'AltitudeConstraint',
     ContinueClimb = 'ContinueClimb',
     CrossingSpeedLimit = 'CrossingSpeedLimit',
     SpeedConstraint = 'SpeedConstraint',
-    CrossingFcuAltitude = 'FcuAltitude',
+    CrossingFcuAltitudeClimb = 'FcuAltitudeClimb',
 
     // Cruise
     StepClimb = 'StepClimb',
@@ -39,6 +39,11 @@ export enum VerticalCheckpointReason {
     BottomOfStepDescent = 'BottomOfStepDescent', // I don't think this actually exists?
 
     // Descent
+    CrossingFcuAltitudeDescent = 'FcuAltitudeDescent',
+    InterceptDescentProfileManaged = 'InterceptDescentProfileManaged',
+    InterceptDescentProfileSelected = 'InterceptDescentProfileSelected',
+    LevelOffForDescentConstraint = 'LevelOffForDescentConstraint',
+    ContinueDescent = 'ContinueDescent',
     TopOfDescent = 'TopOfDescent',
     IdlePathAtmosphericConditions = 'IdlePathAtmosphericConditions',
     IdlePathEnd = 'IdlePathEnd',
@@ -78,6 +83,11 @@ export interface MaxSpeedConstraint {
 export interface DescentAltitudeConstraint {
     distanceFromStart: NauticalMiles,
     constraint: AltitudeConstraint,
+}
+
+export interface ApproachPathAngleConstraint {
+    distanceFromStart: NauticalMiles,
+    pathAngle: PathAngleConstraint,
 }
 
 export class NavGeometryProfile extends BaseGeometryProfile {

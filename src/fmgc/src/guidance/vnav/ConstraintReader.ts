@@ -1,9 +1,9 @@
 import { SegmentType } from '@fmgc/flightplanning/FlightPlanSegment';
 import { FlightPlanManager } from '@fmgc/wtsdk';
 import { Leg } from '@fmgc/guidance/lnav/legs/Leg';
-import { DescentAltitudeConstraint, MaxAltitudeConstraint, MaxSpeedConstraint } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
+import { ApproachPathAngleConstraint, DescentAltitudeConstraint, MaxAltitudeConstraint, MaxSpeedConstraint } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
 import { Geometry } from '@fmgc/guidance/Geometry';
-import { AltitudeConstraintType, SpeedConstraintType } from '@fmgc/guidance/lnav/legs';
+import { AltitudeConstraintType, PathAngleConstraint, SpeedConstraintType } from '@fmgc/guidance/lnav/legs';
 
 type UncategorizedAltitudeConstraint = DescentAltitudeConstraint;
 
@@ -14,9 +14,15 @@ export class ConstraintReader {
 
     public descentAltitudeConstraints: DescentAltitudeConstraint[] = [];
 
+    public approachAltitudeConstraints: DescentAltitudeConstraint[] = [];
+
     public climbSpeedConstraints: MaxSpeedConstraint[] = [];
 
     public descentSpeedConstraints: MaxSpeedConstraint[] = [];
+
+    public approachSpeedConstraints: MaxSpeedConstraint[] = [];
+
+    public flightPathAngleConstraints: ApproachPathAngleConstraint[] = []
 
     public totalFlightPlanDistance = 0;
 
@@ -58,39 +64,60 @@ export class ConstraintReader {
                 if (this.hasValidClimbAltitudeConstraint(leg)) {
                     this.climbAlitudeConstraints.push({
                         distanceFromStart: this.totalFlightPlanDistance,
-                        maxAltitude: leg.altitudeConstraint.altitude1,
+                        maxAltitude: leg.metadata.altitudeConstraint.altitude1,
                     });
                 }
 
                 if (this.hasValidClimbSpeedConstraint(leg)) {
                     this.climbSpeedConstraints.push({
                         distanceFromStart: this.totalFlightPlanDistance,
-                        maxSpeed: leg.speedConstraint.speed,
+                        maxSpeed: leg.metadata.speedConstraint.speed,
                     });
                 }
-            } else if (leg.segment === SegmentType.Arrival || leg.segment === SegmentType.Approach) {
+            } else if (leg.segment === SegmentType.Arrival) {
                 if (this.hasValidDescentAltitudeConstraint(leg)) {
                     this.descentAltitudeConstraints.push({
                         distanceFromStart: this.totalFlightPlanDistance,
-                        constraint: leg.altitudeConstraint,
+                        constraint: leg.metadata.altitudeConstraint,
                     });
                 }
 
                 if (this.hasValidDescentSpeedConstraint(leg)) {
                     this.descentSpeedConstraints.push({
                         distanceFromStart: this.totalFlightPlanDistance,
-                        maxSpeed: leg.speedConstraint.speed,
+                        maxSpeed: leg.metadata.speedConstraint.speed,
                     });
                 }
-            } else if (leg.altitudeConstraint) {
+            } else if (leg.segment === SegmentType.Approach) {
+                if (this.hasValidDescentAltitudeConstraint(leg)) {
+                    this.approachAltitudeConstraints.push({
+                        distanceFromStart: this.totalFlightPlanDistance,
+                        constraint: leg.metadata.altitudeConstraint,
+                    });
+                }
+
+                if (this.hasValidDescentSpeedConstraint(leg)) {
+                    this.approachSpeedConstraints.push({
+                        distanceFromStart: this.totalFlightPlanDistance,
+                        maxSpeed: leg.metadata.speedConstraint.speed,
+                    });
+                }
+
+                if (this.hasValidPathAngleConstraint(leg)) {
+                    this.flightPathAngleConstraints.push({
+                        distanceFromStart: this.totalFlightPlanDistance,
+                        pathAngle: leg.metadata.pathAngleConstraint,
+                    });
+                }
+            } else if (leg.metadata.altitudeConstraint) {
                 uncategorizedAltitudeConstraints.push({
                     distanceFromStart: this.totalFlightPlanDistance,
-                    constraint: leg.altitudeConstraint,
+                    constraint: leg.metadata.altitudeConstraint,
                 });
             } else if (this.hasValidSpeedConstraint(leg)) {
                 uncategorizedSpeedConstraints.push({
                     distanceFromStart: this.totalFlightPlanDistance,
-                    maxSpeed: leg.speedConstraint.speed,
+                    maxSpeed: leg.metadata.speedConstraint.speed,
                 });
             }
         }
@@ -119,40 +146,52 @@ export class ConstraintReader {
     }
 
     private hasValidSpeedConstraint(leg: Leg): boolean {
-        return leg.speedConstraint?.speed > 100 && leg.speedConstraint.type !== SpeedConstraintType.atOrAbove;
+        return leg.metadata.speedConstraint?.speed > 100 && leg.metadata.speedConstraint.type !== SpeedConstraintType.atOrAbove;
     }
 
     private hasValidClimbAltitudeConstraint(leg: Leg): boolean {
-        return leg.altitudeConstraint && leg.altitudeConstraint.type !== AltitudeConstraintType.atOrAbove
-            && (this.climbAlitudeConstraints.length < 1 || leg.altitudeConstraint.altitude1 >= this.climbAlitudeConstraints[this.climbAlitudeConstraints.length - 1].maxAltitude);
+        return leg.metadata.altitudeConstraint && leg.metadata.altitudeConstraint.type !== AltitudeConstraintType.atOrAbove
+            && (this.climbAlitudeConstraints.length < 1 || leg.metadata.altitudeConstraint.altitude1 >= this.climbAlitudeConstraints[this.climbAlitudeConstraints.length - 1].maxAltitude);
     }
 
     private hasValidClimbSpeedConstraint(leg: Leg): boolean {
         return this.hasValidSpeedConstraint(leg)
-            && (this.climbSpeedConstraints.length < 1 || leg.speedConstraint.speed >= this.climbSpeedConstraints[this.climbSpeedConstraints.length - 1].maxSpeed);
+            && (this.climbSpeedConstraints.length < 1 || leg.metadata.speedConstraint.speed >= this.climbSpeedConstraints[this.climbSpeedConstraints.length - 1].maxSpeed);
     }
 
     private hasValidDescentAltitudeConstraint(leg: Leg): boolean {
-        return !!leg.altitudeConstraint;
+        return !!leg.metadata.altitudeConstraint;
     }
 
     private hasValidDescentSpeedConstraint(leg: Leg): boolean {
         return this.hasValidSpeedConstraint(leg);
     }
 
+    private hasValidPathAngleConstraint(leg: Leg) {
+        // We don't use strict equality because we want to check for null and undefined but not 0, which is falsy in JS
+        return leg.metadata.pathAngleConstraint != null;
+    }
+
     resetAltitudeConstraints() {
         this.climbAlitudeConstraints = [];
         this.descentAltitudeConstraints = [];
+        this.approachAltitudeConstraints = [];
     }
 
     resetSpeedConstraints() {
         this.climbSpeedConstraints = [];
         this.descentSpeedConstraints = [];
+        this.approachSpeedConstraints = [];
+    }
+
+    resetPathAngleConstraints() {
+        this.flightPathAngleConstraints = [];
     }
 
     reset() {
         this.resetAltitudeConstraints();
         this.resetSpeedConstraints();
+        this.resetPathAngleConstraints();
 
         this.totalFlightPlanDistance = 0;
         this.distanceToPresentPosition = 0;

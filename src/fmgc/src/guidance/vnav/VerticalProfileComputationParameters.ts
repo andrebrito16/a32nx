@@ -98,6 +98,6 @@ export class VerticalProfileComputationParametersObserver {
     }
 
     canComputeProfile(): boolean {
-        return this.parameters.v2Speed > 0;
+        return this.parameters.flightPhase > FmgcFlightPhase.Takeoff || this.parameters.v2Speed > 0;
     }
 }

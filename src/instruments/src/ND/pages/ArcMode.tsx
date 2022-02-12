@@ -5,7 +5,7 @@ import { MathUtils } from '@shared/MathUtils';
 import { useFlightPlanManager } from '@instruments/common/flightplan';
 import { LatLongData } from '@typings/fs-base-ui/html_ui/JS/Types';
 import { RangeSetting, Mode, EfisSide, NdSymbol } from '@shared/NavigationDisplay';
-import { LateralMode } from '@shared/autopilot';
+import { ArmedLateralMode, isArmed, LateralMode } from '@shared/autopilot';
 import { FlightPlan } from '../elements/FlightPlan';
 import { MapParameters } from '../utils/MapParameters';
 import { RadioNeedle } from '../elements/RadioNeedles';
@@ -36,7 +36,7 @@ export const ArcMode: React.FC<ArcModeProps> = ({ symbols, adirsAlign, rangeSett
     const [lsCourse] = useSimVar('L:A32NX_FM_LS_COURSE', 'number');
     const [lsDisplayed] = useSimVar(`L:BTN_LS_${side === 'L' ? 1 : 2}_FILTER_ACTIVE`, 'bool'); // TODO rename simvar
     const [fmaLatMode] = useSimVar('L:A32NX_FMA_LATERAL_MODE', 'enum', 200);
-    const [fmaLatArmed] = useSimVar('L:A32NX_FMA_LATERAL_ARMED', 'enum', 200);
+    const [armedLateralBitmask] = useSimVar('L:A32NX_FMA_LATERAL_ARMED', 'enum', 200);
     const [groundSpeed] = useSimVar('GPS GROUND SPEED', 'Meters per second', 200);
 
     const heading = Number(MathUtils.fastToFixed(magHeading, 2));
@@ -80,9 +80,10 @@ export const ArcMode: React.FC<ArcModeProps> = ({ symbols, adirsAlign, rangeSett
                             debug={false}
                         />
 
-                        { (((fmaLatMode === LateralMode.NONE
+                        { ((fmaLatMode === LateralMode.NONE
                             || fmaLatMode === LateralMode.HDG
-                            || fmaLatMode === LateralMode.TRACK) && !fmaLatArmed)) && (
+                            || fmaLatMode === LateralMode.TRACK)
+                            && !isArmed(armedLateralBitmask, ArmedLateralMode.NAV)) && (
                             <TrackLine x={384} y={620} heading={heading} track={track} groundSpeed={Number(MathUtils.fastToFixed(groundSpeed, 2))} mapParams={mapParams} symbols={symbols} />
                         )}
                     </g>

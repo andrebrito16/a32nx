@@ -167,6 +167,7 @@ class CDUHoldAtPage {
             };
 
             if (!computed) {
+                // TODO ignore leg hold properties when editing
                 mcdu.onRightInput[1] = () => {
                     mcdu.manualHoldData = null;
                     CDUHoldAtPage.ShowPage(mcdu, waypoint, waypointIndexFP);

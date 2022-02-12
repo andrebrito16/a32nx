@@ -1,3 +1,8 @@
+// Copyright (c) 2021-2022 FlyByWire Simulations
+// Copyright (c) 2021-2022 Synaptic Simulations
+//
+// SPDX-License-Identifier: GPL-3.0
+
 export const LnavConfig = {
 
     /* ========== PATHGEN CONFIG ========== */
@@ -23,6 +28,11 @@ export const LnavConfig = {
      * Whether to print geometry generation / update debug info
      */
     DEBUG_GEOMETRY: false,
+
+    /**
+     * Whether to force the drawing of course reversal (hold, proc turn) vectors at any point in the path
+     */
+    DEBUG_FORCE_INCLUDE_COURSE_REVERSAL_VECTORS: false,
 
     /**
      * Whether to print guidance debug information on the ND

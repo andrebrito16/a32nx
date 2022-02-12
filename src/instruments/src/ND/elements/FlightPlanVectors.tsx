@@ -3,8 +3,8 @@ import { Layer } from '@instruments/common/utils';
 import { DebugPointColour, PathVector, PathVectorType } from '@fmgc/guidance/lnav/PathVector';
 import { LnavConfig } from '@fmgc/guidance/LnavConfig';
 import { EfisSide, EfisVectorsGroup } from '@shared/NavigationDisplay';
-import { Geo } from '@fmgc/utils/Geo';
 import { useCoherentEvent } from '@instruments/common/hooks';
+import { distanceTo } from 'msfs-geo';
 import { MapParameters } from '../utils/MapParameters';
 
 export interface FlightPlanVectorsProps {
@@ -25,17 +25,18 @@ export const FlightPlanVectors: FC<FlightPlanVectorsProps> = memo(({ x, y, mapPa
 
     const lineStyle = vectorsGroupLineStyle(group);
 
-    useCoherentEvent(`A32NX_EFIS_VECTORS_${side}_${EfisVectorsGroup[group]}`, useCallback((newVectors: PathVector[], start: number, done: boolean) => {
+    useCoherentEvent(`A32NX_EFIS_VECTORS_${side}_${EfisVectorsGroup[group]}`, useCallback((newVectors: string, start: number, done: boolean) => {
         if (newVectors) {
+            const parsed: PathVector[] = JSON.parse(newVectors);
             setStagingVectors((old) => {
                 const ret = [...old];
 
                 for (let i = start; i < start + newVectors.length; i++) {
-                    ret[i] = newVectors[i - start];
+                    ret[i] = parsed[i - start];
                 }
 
                 if (done) {
-                    const trimAfter = start + newVectors.length;
+                    const trimAfter = start + parsed.length;
 
                     ret.splice(trimAfter);
 
@@ -76,7 +77,7 @@ export const FlightPlanVectors: FC<FlightPlanVectorsProps> = memo(({ x, y, mapPa
                     const [ix, iy] = mapParams.coordinatesToXYy(vector.startPoint);
                     const [fx, fy] = mapParams.coordinatesToXYy(vector.endPoint);
 
-                    const radius = Geo.getDistance(vector.centrePoint, vector.endPoint) * mapParams.nmToPx;
+                    const radius = distanceTo(vector.centrePoint, vector.endPoint) * mapParams.nmToPx;
 
                     return (
                         <path
