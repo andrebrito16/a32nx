@@ -28,17 +28,16 @@ export const TcasWxrMessages: FC<{ modeIndex: Mode}> = ({ modeIndex }) => {
 
     let leftMessage: TcasWxrMessage | undefined;
     let rightMessage: TcasWxrMessage | undefined;
+    let centerMessage: TcasWxrMessage | undefined;
 
-    const [tcasOnly] = useSimVar('L:A32NX_TCAS_TA_ONLY', 'boolean', 200);
-    const [tcasFault] = useSimVar('L:A32NX_TCAS_FAULT', 'boolean', 200);
-
-    if (tcasFault) {
-        leftMessage = { text: 'TCAS', color: 'Amber' };
-    } else if (tcasOnly) {
-        leftMessage = { text: 'TA ONLY', color: 'White' };
+    // TODO use logic in TCAS when it's implemented
+    const [tcasPosition] = useSimVar('L:A32NX_SWITCH_TCAS_Position', 'enum', 500);
+    const [radioAlt] = useSimVar('PLANE ALT ABOVE GROUND MINUS CG', 'feet', 500);
+    if (tcasPosition === tscasPosition.Ta || (tcasPosition === tscasPosition.TaRa && radioAlt < 1000)) {
+        centerMessage = { text: 'TA ONLY', color: 'White' };
     }
 
-    if (modeIndex !== Mode.ARC && modeIndex !== Mode.ROSE_NAV && modeIndex !== Mode.ROSE_VOR && modeIndex !== Mode.ROSE_ILS || (!leftMessage && !rightMessage)) {
+    if (modeIndex !== Mode.ARC && modeIndex !== Mode.ROSE_NAV && modeIndex !== Mode.ROSE_VOR && modeIndex !== Mode.ROSE_ILS || (!leftMessage && !rightMessage && !centerMessage)) {
         return null;
     }
 
@@ -62,6 +61,12 @@ export const TcasWxrMessages: FC<{ modeIndex: Mode}> = ({ modeIndex }) => {
                     fontSize={25}
                 >
                     {leftMessage.text}
+                </text>
+            )}
+
+            {centerMessage && (
+                <text x={420 / 2} y={25} className={`${centerMessage.color} MiddleAlign`} textAnchor="middle" fontSize={25}>
+                    {centerMessage.text}
                 </text>
             )}
 
