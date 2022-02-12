@@ -12,8 +12,9 @@ import { CFLeg } from '@fmgc/guidance/lnav/legs/CF';
 import { arcDistanceToGo, arcGuidance, maxBank } from '@fmgc/guidance/lnav/CommonGeometry';
 import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { MathUtils } from '@shared/MathUtils';
+import { Geo } from '@fmgc/utils/Geo';
 import { Guidable } from '@fmgc/guidance/Guidable';
-import { bearingTo, closestSmallCircleIntersection, placeBearingDistance } from 'msfs-geo';
+import { closestSmallCircleIntersection, placeBearingDistance } from 'msfs-geo';
 import { PathVector, pathVectorLength, PathVectorType } from '@fmgc/guidance/lnav/PathVector';
 import { GuidanceParameters } from '@fmgc/guidance/ControlLaws';
 import { CALeg } from '@fmgc/guidance/lnav/legs/CA';
@@ -67,7 +68,7 @@ export class DmeArcTransition extends Transition {
         if (this.previousLeg instanceof AFLeg) {
             const turnDirection = Math.sign(MathUtils.diffAngle(this.previousLeg.outboundCourse, this.nextLeg.inboundCourse));
             const nextLegReference = this.nextLeg.getPathStartPoint(); // FIXME FX legs
-            const reference = placeBearingDistance(nextLegReference, this.nextLeg.inboundCourse + 90 * turnDirection, this.radius);
+            const reference = Geo.computeDestinationPoint(nextLegReference, this.radius, this.nextLeg.inboundCourse + 90 * turnDirection);
             const dme = this.previousLeg.centre;
 
             const turnCentre = closestSmallCircleIntersection(
@@ -83,18 +84,18 @@ export class DmeArcTransition extends Transition {
 
             this.centre = turnCentre;
 
-            this.itp = placeBearingDistance(
+            this.itp = Geo.computeDestinationPoint(
                 turnCentre,
-                turnDirection * -this.previousLeg.turnDirectionSign === 1 ? bearingTo(turnCentre, dme) : bearingTo(dme, turnCentre),
                 this.radius,
+                turnDirection * -this.previousLeg.turnDirectionSign === 1 ? Geo.getGreatCircleBearing(turnCentre, dme) : Geo.getGreatCircleBearing(dme, turnCentre),
             );
-            this.ftp = placeBearingDistance(
+            this.ftp = Geo.computeDestinationPoint(
                 turnCentre,
-                this.nextLeg.inboundCourse - 90 * turnDirection,
                 this.radius,
+                this.nextLeg.inboundCourse - 90 * turnDirection,
             );
 
-            this.sweepAngle = MathUtils.diffAngle(bearingTo(turnCentre, this.itp), bearingTo(turnCentre, this.ftp));
+            this.sweepAngle = MathUtils.diffAngle(Geo.getGreatCircleBearing(turnCentre, this.itp), Geo.getGreatCircleBearing(turnCentre, this.ftp));
             this.clockwise = this.sweepAngle > 0;
 
             this.predictedPath.length = 0;
@@ -113,7 +114,7 @@ export class DmeArcTransition extends Transition {
             }
         } else if (this.nextLeg instanceof AFLeg) {
             const turnDirection = Math.sign(MathUtils.diffAngle(this.previousLeg.outboundCourse, this.nextLeg.inboundCourse));
-            const reference = placeBearingDistance(this.previousLeg.getPathEndPoint(), this.previousLeg.outboundCourse + 90 * turnDirection, this.radius);
+            const reference = Geo.computeDestinationPoint(this.previousLeg.getPathEndPoint(), this.radius, this.previousLeg.outboundCourse + 90 * turnDirection);
             const dme = this.nextLeg.centre;
 
             let turnCentre;
@@ -128,16 +129,16 @@ export class DmeArcTransition extends Transition {
                 if (intersection) {
                     turnCentre = intersection;
 
-                    this.itp = placeBearingDistance(
+                    this.itp = Geo.computeDestinationPoint(
                         turnCentre,
-                        this.previousLeg.outboundCourse - 90 * turnDirection,
                         this.radius,
+                        this.previousLeg.outboundCourse - 90 * turnDirection,
                     );
 
-                    this.ftp = placeBearingDistance(
+                    this.ftp = Geo.computeDestinationPoint(
                         turnCentre,
-                        turnDirection * -this.nextLeg.turnDirectionSign === 1 ? bearingTo(turnCentre, dme) : bearingTo(dme, turnCentre),
                         this.radius,
+                        turnDirection * -this.nextLeg.turnDirectionSign === 1 ? Geo.getGreatCircleBearing(turnCentre, dme) : Geo.getGreatCircleBearing(dme, turnCentre),
                     );
                 } else {
                     this.ftp = placeBearingDistance(
@@ -172,22 +173,22 @@ export class DmeArcTransition extends Transition {
                     throw new Error('AFLeg did not intersect with previous leg offset reference');
                 }
 
-                this.itp = placeBearingDistance(
+                this.itp = Geo.computeDestinationPoint(
                     turnCentre,
-                    this.previousLeg.outboundCourse - 90 * turnDirection,
                     this.radius,
+                    this.previousLeg.outboundCourse - 90 * turnDirection,
                 );
 
-                this.ftp = placeBearingDistance(
+                this.ftp = Geo.computeDestinationPoint(
                     turnCentre,
-                    turnDirection * -this.nextLeg.turnDirectionSign === 1 ? bearingTo(turnCentre, dme) : bearingTo(dme, turnCentre),
                     this.radius,
+                    turnDirection * -this.nextLeg.turnDirectionSign === 1 ? Geo.getGreatCircleBearing(turnCentre, dme) : Geo.getGreatCircleBearing(dme, turnCentre),
                 );
             }
 
             this.centre = turnCentre;
 
-            this.sweepAngle = MathUtils.diffAngle(bearingTo(turnCentre, this.itp), bearingTo(turnCentre, this.ftp));
+            this.sweepAngle = MathUtils.diffAngle(Geo.getGreatCircleBearing(turnCentre, this.itp), Geo.getGreatCircleBearing(turnCentre, this.ftp));
             this.clockwise = this.sweepAngle > 0;
 
             this.predictedPath.length = 0;

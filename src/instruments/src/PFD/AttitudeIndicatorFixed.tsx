@@ -1,6 +1,4 @@
 import { Arinc429Word } from '@shared/arinc429';
-import { LateralMode, VerticalMode } from '@shared/autopilot.js';
-import React from 'react';
 import { getSimVar } from '../util.js';
 
 interface AttitudeIndicatorFixedUpperProps {

@@ -1,5 +1,9 @@
 use std::error::Error;
-use systems_wasm::aspects::{ExecuteOn, MsfsAspectBuilder};
+use systems::shared::{from_bool, to_bool};
+use systems_wasm::aspects::{
+    max, EventToVariableMapping, ExecuteOn, MsfsAspectBuilder, VariableToEventMapping,
+    VariableToEventWriteOn,
+};
 use systems_wasm::Variable;
 
 pub(super) fn ailerons(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>> {

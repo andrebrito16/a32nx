@@ -1,6 +1,5 @@
 import { VerticalProfileComputationParametersObserver } from '@fmgc/guidance/vnav/VerticalProfileComputationParameters';
 import { Constants } from '@shared/Constants';
-import { DescentStrategy } from '@fmgc/guidance/vnav/descent/DescentStrategy';
 import { EngineModel } from '../EngineModel';
 import { FlapConf } from '../common';
 import { Predictions, StepResults } from '../Predictions';
@@ -21,6 +20,21 @@ export interface ClimbStrategy {
     predictToDistance(initialAltitude: number, distance: NauticalMiles, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults;
 
     predictToSpeed(initialAltitude: number, finalSpeed: Knots, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults;
+}
+
+export interface DescentStrategy {
+    /**
+     * Computes predictions for a single segment using the atmospheric conditions in the middle.
+     * @param initialAltitude Altitude at the start of climb
+     * @param finalAltitude Altitude to terminate the climb
+     * @param speed
+     * @param mach
+     * @param fuelOnBoard Remainging fuel on board at the start of the climb
+     * @returns `StepResults`
+     */
+    predictToAltitude(initialAltitude: number, finalAltitude: number, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults;
+
+    predictToDistance(initialAltitude: number, distance: NauticalMiles, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults;
 }
 
 export class VerticalSpeedStrategy implements ClimbStrategy, DescentStrategy {
@@ -77,14 +91,6 @@ export class VerticalSpeedStrategy implements ClimbStrategy, DescentStrategy {
             FlapConf.CLEAN,
             perfFactor,
         );
-    }
-
-    predictToDistanceBackwards(finalAltitude: number, distance: NauticalMiles, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults {
-        throw new Error('[FMS/VNAV] Backwards distance predictions not implemented for V/S strategy');
-    }
-
-    predictToSpeedBackwards(finalAltitude: number, finalSpeed: Knots, speed: Knots, mach: Mach, fuelOnBoard: number): StepResults {
-        throw new Error('[FMS/VNAV] Backwards speed predictions not implemented for V/S strategy');
     }
 }
 

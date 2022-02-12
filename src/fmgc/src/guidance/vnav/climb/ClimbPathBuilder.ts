@@ -1,7 +1,7 @@
 import { VerticalProfileComputationParametersObserver } from '@fmgc/guidance/vnav/VerticalProfileComputationParameters';
 import { SpeedProfile } from '@fmgc/guidance/vnav/climb/SpeedProfile';
 import { Constants } from '@shared/Constants';
-import { ArmedVerticalMode, isArmed, VerticalMode } from '@shared/autopilot';
+import { ArmedVerticalMode, VerticalMode } from '@shared/autopilot';
 import { ClimbStrategy } from '@fmgc/guidance/vnav/climb/ClimbStrategy';
 import { EngineModel } from '@fmgc/guidance/vnav/EngineModel';
 import { Predictions, StepResults } from '../Predictions';
@@ -84,7 +84,7 @@ export class ClimbPathBuilder {
 
                 // We reach the target altitude before the constraint, so we insert a level segment.
                 if (profile.lastCheckpoint.distanceFromStart < constraintDistanceFromStart) {
-                    profile.lastCheckpoint.reason = VerticalCheckpointReason.LevelOffForClimbConstraint;
+                    profile.lastCheckpoint.reason = VerticalCheckpointReason.LevelOffForConstraint;
 
                     this.addLevelSegmentSteps(profile, speedProfile, constraintDistanceFromStart);
                 }
@@ -307,7 +307,7 @@ export class ClimbPathBuilder {
 
         const distance = profile.interpolateDistanceAtAltitude(fcuAltitude);
 
-        profile.addInterpolatedCheckpoint(distance, { reason: VerticalCheckpointReason.CrossingFcuAltitudeClimb });
+        profile.addInterpolatedCheckpoint(distance, { reason: VerticalCheckpointReason.CrossingFcuAltitude });
     }
 
     private shouldAddFcuAltAsCheckpoint(verticalMode: VerticalMode, armedVerticalMode: ArmedVerticalMode) {
@@ -320,7 +320,7 @@ export class ClimbPathBuilder {
             VerticalMode.SRS_GA,
         ];
 
-        return isArmed(armedVerticalMode, ArmedVerticalMode.CLB) || verticalModesToShowLevelOffArrowFor.includes(verticalMode);
+        return ((armedVerticalMode & ArmedVerticalMode.CLB) === ArmedVerticalMode.CLB) || verticalModesToShowLevelOffArrowFor.includes(verticalMode);
     }
 
     private addCheckpointFromStep(profile: BaseGeometryProfile, step: StepResults, reason: VerticalCheckpointReason) {

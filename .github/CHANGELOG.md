@@ -140,17 +140,11 @@
 1. [AP] Added Autoland capability for special terrain profiles, i.e. KSEA 16R - @aguther (Andreas Guther)
 1. [ATHR] Adjustment of ATHR SPD/MACH gains - @IbrahimK42 (IbrahimK42)
 1. [ATHR] Fix ATHR Alt Soft Mode - @IbrahimK42 (IbrahimK42)
-1. [HYD] Elevator hydraulic control (only visual and hydraulics) - @Crocket63
-1. [HYD] Simplified max step loop updater - @Crocket63
-1. [MISC] Fix for bleed/hyd system failure in some conditions - @Crocket63
-1. [ECAM] Add pack abnormally off warnings - @tracernz (Mike)
-1. [ELEC] Fix emergency elec on init in flight wrongly triggering the RAT - @Crocket63
-1. [ATHR] Fix ATHR Speed Undershoot - @IbrahimK42 (IbrahimK42)
-1. [FLIGHTMODEL] Improved pitch stability in turbulence - @aguther (Andreas Guther)
-1. [AP] Fix DES not being armed in ALT CST and altitude constraint changing to FCU altitude - @aguther (Andreas Guther)
 1. [TCAS] Implemented traffic advisories, resolution advisories, and collision avoidance logic - @wpine215 (Iceman) @2hwk (2Cas#1022)
 1. [PFD] Implemented TCAS guidance on vertical speed tape - @wpine215 (Iceman)
 1. [SOUNDS] Connected TCAS TA/RA logic to TCAS Wwise events - @wpine215 (Iceman)  @2hwk (2Cas#1022)
+1. [HYD] Aileron hydraulic control (only visual and hydraulics) - @Crocket63
+1. [HYD] Elevator hydraulic control (only visual and hydraulics) - @Crocket63
 
 ## 0.7.0
 

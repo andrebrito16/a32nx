@@ -3,20 +3,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0
 
+import { AltitudeConstraint, SpeedConstraint } from '@fmgc/guidance/lnav/legs/index';
 import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { Guidable } from '@fmgc/guidance/Guidable';
 import { SegmentType } from '@fmgc/flightplanning/FlightPlanSegment';
 import { GuidanceParameters } from '@fmgc/guidance/ControlLaws';
 import { courseToFixDistanceToGo, courseToFixGuidance } from '@fmgc/guidance/lnav/CommonGeometry';
 import { XFLeg } from '@fmgc/guidance/lnav/legs/XF';
+import { getSpeedConstraintFromWaypoint } from '@fmgc/guidance/lnav/legs';
 import { LnavConfig } from '@fmgc/guidance/LnavConfig';
 import { Transition } from '@fmgc/guidance/lnav/Transition';
 import { Geo } from '@fmgc/utils/Geo';
 import { FixedRadiusTransition } from '@fmgc/guidance/lnav/transitions/FixedRadiusTransition';
 import { DmeArcTransition } from '@fmgc/guidance/lnav/transitions/DmeArcTransition';
-import { bearingTo, distanceTo } from 'msfs-geo';
-import { MathUtils } from '@shared/MathUtils';
-import { LegMetadata } from '@fmgc/guidance/lnav/legs/index';
 import { PathVector, PathVectorType } from '../PathVector';
 
 export class CFLeg extends XFLeg {
@@ -25,7 +24,6 @@ export class CFLeg extends XFLeg {
     constructor(
         fix: WayPoint,
         public readonly course: DegreesTrue,
-        public readonly metadata: Readonly<LegMetadata>,
         segment: SegmentType,
     ) {
         super(fix);
@@ -95,44 +93,10 @@ export class CFLeg extends XFLeg {
                 endPoint: this.getPathEndPoint(),
             }];
         } else {
-            const startPoint = Geo.doublePlaceBearingIntercept(
-                this.fix.infos.coordinates,
-                this.getPathStartPoint(),
-                Avionics.Utils.clampAngle(this.course + 180),
-                Avionics.Utils.clampAngle(this.course + 90),
-            );
-
-            const bearingWithTransitions = bearingTo(this.getPathStartPoint(), this.getPathEndPoint());
-            const intersectedEndPoint = Geo.doublePlaceBearingIntercept(
-                this.fix.infos.coordinates,
-                this.getPathStartPoint(),
-                Avionics.Utils.clampAngle(this.course + 90),
-                bearingWithTransitions,
-            );
-
-            let endPoint = this.getPathEndPoint();
-            if (distanceTo(this.fix.infos.coordinates, intersectedEndPoint) > 0.01 && Math.abs(MathUtils.diffAngle(this.course, bearingWithTransitions)) > 1) {
-                const correctedStartPoint = Geo.doublePlaceBearingIntercept(
-                    this.fix.infos.coordinates,
-                    this.getPathStartPoint(),
-                    Avionics.Utils.clampAngle(this.course + 180),
-                    Avionics.Utils.clampAngle(this.course + 90),
-                );
-
-                const correctedEndPoint = Geo.doublePlaceBearingIntercept(
-                    correctedStartPoint,
-                    this.fix.infos.coordinates,
-                    this.course,
-                    Avionics.Utils.clampAngle(this.course + 90),
-                );
-
-                endPoint = correctedEndPoint;
-            }
-
             this.computedPath = [{
                 type: PathVectorType.Line,
-                startPoint,
-                endPoint,
+                startPoint: this.getPathStartPoint(),
+                endPoint: this.getPathEndPoint(),
             }];
         }
 
@@ -152,6 +116,10 @@ export class CFLeg extends XFLeg {
                 },
             );
         }
+    }
+
+    get altitudeConstraint(): AltitudeConstraint | undefined {
+        return undefined;
     }
 
     get inboundCourse(): Degrees {
@@ -178,6 +146,10 @@ export class CFLeg extends XFLeg {
         const dtg = courseToFixDistanceToGo(ppos, this.course, this.getPathEndPoint());
 
         return dtg >= 0 && dtg <= this.distance;
+    }
+
+    get speedConstraint(): SpeedConstraint | undefined {
+        return getSpeedConstraintFromWaypoint(this.fix);
     }
 
     get repr(): string {

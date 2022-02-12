@@ -4,11 +4,16 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { GuidanceParameters } from '@fmgc/guidance/ControlLaws';
+import {
+    AltitudeConstraint,
+    SpeedConstraint,
+    getAltitudeConstraintFromWaypoint,
+    getSpeedConstraintFromWaypoint,
+} from '@fmgc/guidance/lnav/legs';
 import { SegmentType } from '@fmgc/wtsdk';
 import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { arcDistanceToGo, arcGuidance, arcLength } from '@fmgc/guidance/lnav/CommonGeometry';
 import { XFLeg } from '@fmgc/guidance/lnav/legs/XF';
-import { LegMetadata } from '@fmgc/guidance/lnav/legs/index';
 import { PathVector, PathVectorType } from '../PathVector';
 
 export class RFLeg extends XFLeg {
@@ -31,13 +36,7 @@ export class RFLeg extends XFLeg {
 
     private computedPath: PathVector[] = [];
 
-    constructor(
-        from: WayPoint,
-        to: WayPoint,
-        center: LatLongData,
-        public metadata: LegMetadata,
-        segment: SegmentType,
-    ) {
+    constructor(from: WayPoint, to: WayPoint, center: LatLongData, segment: SegmentType) {
         super(to);
 
         this.from = from;
@@ -116,6 +115,14 @@ export class RFLeg extends XFLeg {
 
     get distanceToTermination(): NauticalMiles {
         return arcLength(this.radius, this.angle);
+    }
+
+    get speedConstraint(): SpeedConstraint | undefined {
+        return getSpeedConstraintFromWaypoint(this.to);
+    }
+
+    get altitudeConstraint(): AltitudeConstraint | undefined {
+        return getAltitudeConstraintFromWaypoint(this.to);
     }
 
     // basically straight from type 1 transition... willl need refinement

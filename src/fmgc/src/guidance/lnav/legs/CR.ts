@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0
 
+import { AltitudeConstraint, SpeedConstraint } from '@fmgc/guidance/lnav/legs/index';
 import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { Guidable } from '@fmgc/guidance/Guidable';
 import { SegmentType } from '@fmgc/flightplanning/FlightPlanSegment';
@@ -15,8 +16,8 @@ import {
 import { Geo } from '@fmgc/utils/Geo';
 import { LnavConfig } from '@fmgc/guidance/LnavConfig';
 import { Leg } from '@fmgc/guidance/lnav/legs/Leg';
+import { TurnDirection } from '@fmgc/types/fstypes/FSEnums';
 import { distanceTo } from 'msfs-geo';
-import { LegMetadata } from '@fmgc/guidance/lnav/legs/index';
 import { PathVector, PathVectorType } from '../PathVector';
 
 export class CRLeg extends Leg {
@@ -26,12 +27,13 @@ export class CRLeg extends Leg {
         public readonly course: DegreesTrue,
         public readonly origin: { coordinates: Coordinates, ident: string, theta: DegreesMagnetic },
         public readonly radial: DegreesTrue,
-        public readonly metadata: Readonly<LegMetadata>,
         segment: SegmentType,
+        constrainedTurnDirection = TurnDirection.Unknown,
     ) {
         super();
 
         this.segment = segment;
+        this.constrainedTurnDirection = constrainedTurnDirection;
     }
 
     intercept: Coordinates | undefined = undefined;
@@ -108,12 +110,20 @@ export class CRLeg extends Leg {
         return side === 1;
     }
 
+    get altitudeConstraint(): AltitudeConstraint | undefined {
+        return undefined;
+    }
+
     get inboundCourse(): Degrees {
         return this.course;
     }
 
     get outboundCourse(): Degrees {
         return this.course;
+    }
+
+    get distance(): NauticalMiles {
+        return Geo.getDistance(this.getPathStartPoint(), this.getPathEndPoint());
     }
 
     get distanceToTermination(): NauticalMiles {
@@ -144,7 +154,11 @@ export class CRLeg extends Leg {
         return dtg >= 0 && dtg <= this.distance;
     }
 
+    get speedConstraint(): SpeedConstraint | undefined {
+        return undefined;
+    }
+
     get repr(): string {
-        return 'CR';
+        return `CR`;
     }
 }

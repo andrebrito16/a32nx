@@ -1,5 +1,6 @@
 #![cfg(any(target_arch = "wasm32", doc))]
 mod ailerons;
+mod elevators;
 mod autobrakes;
 mod brakes;
 mod elevators;
@@ -9,6 +10,7 @@ mod rudder;
 
 use a320_systems::A320;
 use ailerons::ailerons;
+use elevators::elevators;
 use autobrakes::autobrakes;
 use brakes::brakes;
 use elevators::elevators;
@@ -161,7 +163,6 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
             .with_aspect(flaps)?
             .with_aspect(ailerons)?
             .with_aspect(elevators)?
-            .with_aspect(rudder)?
             .build(A320::new)?;
 
     while let Some(event) = gauge.next_event().await {

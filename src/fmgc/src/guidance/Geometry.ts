@@ -57,7 +57,7 @@ export class Geometry {
 
         for (const [index, leg] of this.legs.entries()) {
             if (activeLegIndex !== undefined) {
-                if (!LnavConfig.DEBUG_FORCE_INCLUDE_COURSE_REVERSAL_VECTORS && isCourseReversalLeg(leg) && index !== activeLegIndex && index !== (activeLegIndex + 1)) {
+                if (isCourseReversalLeg(leg) && index !== activeLegIndex && index !== (activeLegIndex + 1)) {
                     continue;
                 }
             }

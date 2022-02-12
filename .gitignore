@@ -59,7 +59,6 @@ node_modules
 src/instruments/buildSrc/custom/*
 /flybywire-aircraft-a320-neo/MCDU SERVER/
 /src/mcdu-server/client/build
-!/flybywire-aircraft-a320-neo/CORS SERVER/*
 /**/.rollup.cache
 tsconfig.tsbuildinfo
 /**/package-lock.json

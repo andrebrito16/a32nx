@@ -3,8 +3,7 @@ import { DescentPathBuilder } from '@fmgc/guidance/vnav/descent/DescentPathBuild
 import { DecelPathBuilder } from '@fmgc/guidance/vnav/descent/DecelPathBuilder';
 import { NavGeometryProfile, VerticalCheckpointReason } from '@fmgc/guidance/vnav/profile/NavGeometryProfile';
 import { SpeedProfile } from '@fmgc/guidance/vnav/climb/SpeedProfile';
-import { ClimbStrategy } from '@fmgc/guidance/vnav/climb/ClimbStrategy';
-import { DescentStrategy } from '@fmgc/guidance/vnav/descent/DescentStrategy';
+import { ClimbStrategy, DescentStrategy } from '@fmgc/guidance/vnav/climb/ClimbStrategy';
 
 export class CruiseToDescentCoordinator {
     private lastEstimatedFuelAtDestination: Pounds = 2300;
@@ -49,7 +48,7 @@ export class CruiseToDescentCoordinator {
             this.decelPathBuilder.computeDecelPath(profile, this.lastEstimatedFuelAtDestination, this.lastEstimatedTimeAtDestination);
 
             // Geometric and idle
-            const todCheckpoint = this.descentPathBuilder.computeManagedDescentPath(profile, speedProfile, this.cruisePathBuilder.getFinalCruiseAltitude());
+            const todCheckpoint = this.descentPathBuilder.computeDescentPath(profile, speedProfile, this.cruisePathBuilder.getFinalCruiseAltitude());
             if (todCheckpoint.distanceFromStart < startOfCruiseCheckpoint.distanceFromStart) {
                 // T/D Reached
                 return;

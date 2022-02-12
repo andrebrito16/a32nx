@@ -7,9 +7,8 @@ import { GuidanceController } from '@fmgc/guidance/GuidanceController';
 import { EfisSide, EfisVectorsGroup } from '@shared/NavigationDisplay';
 import { PathVector, pathVectorLength, pathVectorValid } from '@fmgc/guidance/lnav/PathVector';
 import { LnavConfig } from '@fmgc/guidance/LnavConfig';
-import { ArmedLateralMode, isArmed, LateralMode } from '@shared/autopilot';
+import { LateralMode } from '@shared/autopilot';
 import { TaskCategory } from '@fmgc/guidance/TaskQueue';
-import stringify from 'safe-stable-stringify';
 
 const TRANSMIT_GROUP_SIZE = 4;
 
@@ -68,7 +67,7 @@ export class EfisVectors {
 
         const engagedLateralMode = SimVar.GetSimVarValue('L:A32NX_FMA_LATERAL_MODE', 'Number') as LateralMode;
         const armedLateralMode = SimVar.GetSimVarValue('L:A32NX_FMA_LATERAL_ARMED', 'Enum');
-        const navArmed = isArmed(armedLateralMode, ArmedLateralMode.NAV);
+        const navArmed = (armedLateralMode & 1) === 1;
 
         const transmitActive = engagedLateralMode === LateralMode.NAV || engagedLateralMode === LateralMode.LOC_CPT || engagedLateralMode === LateralMode.LOC_TRACK || navArmed;
         const clearActive = !transmitActive && this.currentActiveVectors.length > 0;
@@ -156,7 +155,7 @@ export class EfisVectors {
                 for (let i = 0; i < numGroups; i++) {
                     this.listener.triggerToAllSubscribers(
                         `A32NX_EFIS_VECTORS_${side}_${EfisVectorsGroup[vectorsGroup]}`,
-                        stringify(vectors.slice(i * TRANSMIT_GROUP_SIZE, (i + 1) * TRANSMIT_GROUP_SIZE)),
+                        vectors.slice(i * TRANSMIT_GROUP_SIZE, (i + 1) * TRANSMIT_GROUP_SIZE),
                         i * TRANSMIT_GROUP_SIZE,
                     );
                     if (LnavConfig.DEBUG_PATH_DRAWING) {
@@ -169,7 +168,7 @@ export class EfisVectors {
 
                 this.listener.triggerToAllSubscribers(
                     `A32NX_EFIS_VECTORS_${side}_${EfisVectorsGroup[vectorsGroup]}`,
-                    stringify(vectors.slice(lastStartIndex, vectors.length)),
+                    vectors.slice(lastStartIndex, vectors.length),
                     lastStartIndex,
                     true,
                 );

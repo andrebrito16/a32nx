@@ -166,6 +166,8 @@ void FlyByWireInterface::loadConfiguration() {
   // --------------------------------------------------------------------------
   // load values - autothrust
   autothrustThrustLimitReverse = INITypeConversion::getDouble(iniStructure, "AUTOTHRUST", "THRUST_LIMIT_REVERSE", -45.0);
+  autothrustThrustLimitUseExternal = INITypeConversion::getBoolean(iniStructure, "AUTOTHRUST", "USE_EXTERNAL_LIMIT", true);
+  autothrustThrustLimitUseExternalFlex = INITypeConversion::getBoolean(iniStructure, "AUTOTHRUST", "USE_EXTERNAL_LIMIT_FLEX", true);
 
   // initialize local variable for reverse
   idAutothrustThrustLimitREV->set(autothrustThrustLimitReverse);
@@ -1517,12 +1519,14 @@ bool FlyByWireInterface::updateAutothrust(double sampleTime) {
         simData.ap_V_c_kn,
         idFmgcV_LS->get(),
         idFmgcV_MAX->get(),
-        idAutothrustThrustLimitREV->get(),
-        idAutothrustThrustLimitIDLE->get(),
-        idAutothrustThrustLimitCLB->get(),
-        idAutothrustThrustLimitFLX->get(),
-        idAutothrustThrustLimitMCT->get(),
-        idAutothrustThrustLimitTOGA->get(),
+        idAutothrustThrustLimitREV->get(),   // REV
+        idAutothrustThrustLimitIDLE->get(),  // IDLE
+        autothrustThrustLimitUseExternal && !autothrustThrustLimitUseExternalFlex
+            ? thrustLimits.getExternalOutputs().out.thrust_limit_CLB_percent
+            : idAutothrustThrustLimitCLB->get(),  // CLB
+        idAutothrustThrustLimitFLX->get(),        // FLX
+        idAutothrustThrustLimitMCT->get(),        // MCT
+        idAutothrustThrustLimitTOGA->get(),       // TOGA
         idFmgcFlexTemperature->get(),
         autopilotStateMachineOutput.autothrust_mode,
         simData.is_mach_mode_active,

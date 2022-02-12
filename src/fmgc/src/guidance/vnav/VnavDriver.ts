@@ -9,7 +9,7 @@ import { PseudoWaypointFlightPlanInfo } from '@fmgc/guidance/PseudoWaypoint';
 import { VerticalProfileComputationParametersObserver } from '@fmgc/guidance/vnav/VerticalProfileComputationParameters';
 import { CruisePathBuilder } from '@fmgc/guidance/vnav/cruise/CruisePathBuilder';
 import { CruiseToDescentCoordinator } from '@fmgc/guidance/vnav/CruiseToDescentCoordinator';
-import { ArmedLateralMode, ArmedVerticalMode, isArmed, LateralMode, VerticalMode } from '@shared/autopilot';
+import { ArmedLateralMode, ArmedVerticalMode, LateralMode, VerticalMode } from '@shared/autopilot';
 import { VnavConfig } from '@fmgc/guidance/vnav/VnavConfig';
 import { McduSpeedProfile, ExpediteSpeedProfile, NdSpeedProfile } from '@fmgc/guidance/vnav/climb/SpeedProfile';
 import { SelectedGeometryProfile } from '@fmgc/guidance/vnav/profile/SelectedGeometryProfile';
@@ -21,8 +21,6 @@ import { Constants } from '@shared/Constants';
 import { ClimbThrustClimbStrategy, VerticalSpeedStrategy } from '@fmgc/guidance/vnav/climb/ClimbStrategy';
 import { ConstraintReader } from '@fmgc/guidance/vnav/ConstraintReader';
 import { FmgcFlightPhase } from '@shared/flightphase';
-import { TacticalDescentPathBuilder } from '@fmgc/guidance/vnav/descent/TacticalDescentPathBuilder';
-import { IdleDescentStrategy } from '@fmgc/guidance/vnav/descent/DescentStrategy';
 import { Geometry } from '../Geometry';
 import { GuidanceComponent } from '../GuidanceComponent';
 import { NavGeometryProfile, VerticalCheckpointReason } from './profile/NavGeometryProfile';
@@ -39,9 +37,7 @@ export class VnavDriver implements GuidanceComponent {
 
     cruisePathBuilder: CruisePathBuilder;
 
-    tacticalDescentPathBuilder: TacticalDescentPathBuilder;
-
-    managedDescentPathBuilder: DescentPathBuilder;
+    descentPathBuilder: DescentPathBuilder;
 
     decelPathBuilder: DecelPathBuilder;
 
@@ -76,10 +72,9 @@ export class VnavDriver implements GuidanceComponent {
         this.climbPathBuilder = new ClimbPathBuilder(computationParametersObserver, this.atmosphericConditions);
         this.stepCoordinator = new StepCoordinator(this.flightPlanManager);
         this.cruisePathBuilder = new CruisePathBuilder(computationParametersObserver, this.atmosphericConditions, this.stepCoordinator);
-        this.tacticalDescentPathBuilder = new TacticalDescentPathBuilder(this.computationParametersObserver);
-        this.managedDescentPathBuilder = new DescentPathBuilder(computationParametersObserver, this.atmosphericConditions);
+        this.descentPathBuilder = new DescentPathBuilder(computationParametersObserver, this.atmosphericConditions);
         this.decelPathBuilder = new DecelPathBuilder();
-        this.cruiseToDescentCoordinator = new CruiseToDescentCoordinator(this.cruisePathBuilder, this.managedDescentPathBuilder, this.decelPathBuilder);
+        this.cruiseToDescentCoordinator = new CruiseToDescentCoordinator(this.cruisePathBuilder, this.descentPathBuilder, this.decelPathBuilder);
 
         this.constraintReader = new ConstraintReader(this.flightPlanManager);
     }
@@ -143,13 +138,13 @@ export class VnavDriver implements GuidanceComponent {
      * Based on the last checkpoint in the profile, we build a profile to the destination
      * @param geometry
      */
-    private finishProfileInManagedModes(profile: BaseGeometryProfile, fromFlightPhase: FmgcFlightPhase) {
-        const { cruiseAltitude } = this.computationParametersObserver.get();
+    private finishProfileInManagedModes(profile: BaseGeometryProfile) {
+        const { cruiseAltitude, flightPhase } = this.computationParametersObserver.get();
 
         const managedClimbStrategy = new ClimbThrustClimbStrategy(this.computationParametersObserver, this.atmosphericConditions);
         const stepDescentStrategy = new VerticalSpeedStrategy(this.computationParametersObserver, this.atmosphericConditions, -1000);
 
-        if (fromFlightPhase < FmgcFlightPhase.Climb) {
+        if (flightPhase < FmgcFlightPhase.Climb) {
             this.takeoffPathBuilder.buildTakeoffPath(profile);
         }
 
@@ -160,7 +155,7 @@ export class VnavDriver implements GuidanceComponent {
             this.currentNavGeometryProfile.descentSpeedConstraints,
         );
 
-        if (fromFlightPhase < FmgcFlightPhase.Cruise) {
+        if (flightPhase < FmgcFlightPhase.Cruise) {
             this.climbPathBuilder.computeClimbPath(profile, managedClimbStrategy, this.currentMcduSpeedProfile, cruiseAltitude);
         }
 
@@ -187,7 +182,7 @@ export class VnavDriver implements GuidanceComponent {
             );
         }
 
-        this.finishProfileInManagedModes(this.currentNavGeometryProfile, Math.max(FmgcFlightPhase.Takeoff, flightPhase));
+        this.finishProfileInManagedModes(this.currentNavGeometryProfile);
 
         this.currentNavGeometryProfile.finalizeProfile();
 
@@ -225,6 +220,10 @@ export class VnavDriver implements GuidanceComponent {
             this.currentNdGeometryProfile.resetAltitudeConstraints();
         }
 
+        const climbStrategy = fcuVerticalMode === VerticalMode.VS
+            ? new VerticalSpeedStrategy(this.computationParametersObserver, this.atmosphericConditions, fcuVerticalSpeed)
+            : new ClimbThrustClimbStrategy(this.computationParametersObserver, this.atmosphericConditions);
+
         const speedProfile = this.shouldObeySpeedConstraints()
             ? this.currentMcduSpeedProfile
             : new NdSpeedProfile(
@@ -234,37 +233,9 @@ export class VnavDriver implements GuidanceComponent {
                 this.currentNdGeometryProfile.descentSpeedConstraints,
             );
 
-        const tacticalClimbModes = [
-            VerticalMode.OP_CLB,
-        ];
-
-        const tacticalDescentModes = [
-            VerticalMode.OP_DES,
-        ];
-
-        if (tacticalClimbModes.includes(fcuVerticalMode) || fcuVerticalMode === VerticalMode.VS && fcuVerticalSpeed > 0) {
-            const climbStrategy = fcuVerticalMode === VerticalMode.VS
-                ? new VerticalSpeedStrategy(this.computationParametersObserver, this.atmosphericConditions, fcuVerticalSpeed)
-                : new ClimbThrustClimbStrategy(this.computationParametersObserver, this.atmosphericConditions);
-
+        if (flightPhase < FmgcFlightPhase.Cruise) {
             this.climbPathBuilder.computeClimbPath(this.currentNdGeometryProfile,
                 climbStrategy, speedProfile, fcuAltitude);
-        } else if (tacticalDescentModes.includes(fcuVerticalMode) || fcuVerticalMode === VerticalMode.VS && fcuVerticalSpeed < 0) {
-            const descentStrategy = fcuVerticalMode === VerticalMode.VS
-                ? new VerticalSpeedStrategy(this.computationParametersObserver, this.atmosphericConditions, fcuVerticalSpeed)
-                : new IdleDescentStrategy(this.computationParametersObserver, this.atmosphericConditions);
-
-            this.tacticalDescentPathBuilder.buildTacticalDescentPath(this.currentNdGeometryProfile, descentStrategy, speedProfile, fcuAltitude);
-        }
-
-        if (this.isInManagedNav() && this.currentNdGeometryProfile) {
-            // Move PresentPosition checkpoint to where we are at the end of the tactical repositioning to trick the managed profile computing from there
-            if (this.currentNdGeometryProfile.checkpoints.length > 1) {
-                this.currentNdGeometryProfile.checkpoints = this.currentNdGeometryProfile.checkpoints.filter(({ reason }) => reason !== VerticalCheckpointReason.PresentPosition);
-                this.currentNdGeometryProfile.addCheckpointFromLast((checkpoint) => ({ ...checkpoint, reason: VerticalCheckpointReason.PresentPosition }));
-            }
-
-            this.finishProfileInManagedModes(this.currentNdGeometryProfile, Math.max(FmgcFlightPhase.Climb, flightPhase));
         }
 
         this.currentNdGeometryProfile.finalizeProfile();
@@ -284,6 +255,9 @@ export class VnavDriver implements GuidanceComponent {
     shouldObeyAltitudeConstraints(): boolean {
         const { fcuArmedLateralMode, fcuArmedVerticalMode, fcuVerticalMode } = this.computationParametersObserver.get();
 
+        const isClbArmed = (fcuArmedVerticalMode & ArmedVerticalMode.CLB) === ArmedVerticalMode.CLB;
+        const isNavArmed = (fcuArmedLateralMode & ArmedLateralMode.NAV) === ArmedLateralMode.NAV;
+
         const verticalModesToApplyAltitudeConstraintsFor = [
             VerticalMode.CLB,
             VerticalMode.ALT,
@@ -293,9 +267,7 @@ export class VnavDriver implements GuidanceComponent {
             VerticalMode.DES,
         ];
 
-        return isArmed(fcuArmedVerticalMode, ArmedVerticalMode.CLB)
-            || isArmed(fcuArmedLateralMode, ArmedLateralMode.NAV)
-            || verticalModesToApplyAltitudeConstraintsFor.includes(fcuVerticalMode);
+        return isClbArmed || isNavArmed || verticalModesToApplyAltitudeConstraintsFor.includes(fcuVerticalMode);
     }
 
     computeVerticalProfileForExpediteClimb(): SelectedGeometryProfile | undefined {
@@ -333,7 +305,7 @@ export class VnavDriver implements GuidanceComponent {
     isInManagedNav(): boolean {
         const { fcuLateralMode, fcuArmedLateralMode } = this.computationParametersObserver.get();
 
-        return fcuLateralMode === LateralMode.NAV || isArmed(fcuArmedLateralMode, ArmedLateralMode.NAV);
+        return fcuLateralMode === LateralMode.NAV || (fcuArmedLateralMode & ArmedLateralMode.NAV) === 1;
     }
 
     getVerticalDeviation(): Feet | null {

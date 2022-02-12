@@ -5,7 +5,7 @@ import { MathUtils } from '@shared/MathUtils';
 import { useFlightPlanManager } from '@instruments/common/flightplan';
 import { LatLongData } from '@typings/fs-base-ui/html_ui/JS/Types';
 import { RangeSetting, Mode, EfisSide, NdSymbol } from '@shared/NavigationDisplay';
-import { ArmedLateralMode, isArmed, LateralMode } from '@shared/autopilot';
+import { LateralMode } from '@shared/autopilot';
 import { FlightPlan } from '../elements/FlightPlan';
 import { MapParameters } from '../utils/MapParameters';
 import { RadioNeedle } from '../elements/RadioNeedles';
@@ -80,10 +80,9 @@ export const ArcMode: React.FC<ArcModeProps> = ({ symbols, adirsAlign, rangeSett
                             debug={false}
                         />
 
-                        { ((fmaLatMode === LateralMode.NONE
+                        { (((fmaLatMode === LateralMode.NONE
                             || fmaLatMode === LateralMode.HDG
-                            || fmaLatMode === LateralMode.TRACK)
-                            && !isArmed(armedLateralBitmask, ArmedLateralMode.NAV)) && (
+                            || fmaLatMode === LateralMode.TRACK) && !fmaLatArmed)) && (
                             <TrackLine x={384} y={620} heading={heading} track={track} groundSpeed={Number(MathUtils.fastToFixed(groundSpeed, 2))} mapParams={mapParams} symbols={symbols} />
                         )}
                     </g>

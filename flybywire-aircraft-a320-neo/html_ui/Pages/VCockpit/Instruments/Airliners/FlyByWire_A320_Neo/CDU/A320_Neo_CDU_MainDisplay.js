@@ -178,6 +178,8 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
 
         this.setupFmgcTriggers();
 
+        this.setupFmgcTriggers();
+
         this.setTimeout = (func) => {
             setTimeout(() => {
                 func;
